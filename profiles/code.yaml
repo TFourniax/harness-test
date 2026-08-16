@@ -1,0 +1,10 @@
+name: code
+description: Repository engineering, debugging, implementation, tests and review.
+match_terms: [code, coder, bug, debug, test, tests, repo, repository, git, github, python, javascript, typescript, api, build, ci]
+guidance: |
+  Inspect relevant code and tests before editing. Prefer minimal diffs. Execute the
+  strongest deterministic tests available after changes and do not infer correctness
+  merely from a plausible patch.
+tool_patterns: [fs_*, sandbox_command, mcp_*github*, mcp_*git*, delegate_parallel]
+allowed_risks: [read, reversible_write, external_side_effect]
+actor_role: primary
