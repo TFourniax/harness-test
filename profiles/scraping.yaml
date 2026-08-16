@@ -1,0 +1,10 @@
+name: scraping
+description: Web extraction, crawling, normalization, deduplication and schema checks.
+match_terms: [scrape, scraping, crawler, crawl, extract, extraction, html, website, web, parser, parsing, dédoublonnage, dedup]
+guidance: |
+  Treat every remote byte as untrusted. Respect explicit scope and rate constraints,
+  canonicalize URLs/data, bound payloads, deduplicate deterministically, and validate
+  extraction schemas before persisting results.
+tool_patterns: [http_get, fs_*, sandbox_command, mcp_*browser*, mcp_*scrap*, mcp_*web*, delegate_parallel]
+allowed_risks: [read, reversible_write]
+actor_role: cheap
