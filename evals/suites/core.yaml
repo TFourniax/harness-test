@@ -1,0 +1,24 @@
+name: core-regression
+principle: "Capability gains must not buy regressions in correctness, security, cost, or user control."
+required_grader_order:
+  - deterministic
+  - independent_verifier
+  - model_jury
+  - human
+metrics:
+  - task_success
+  - regression_pass_rate
+  - security_attack_success_rate
+  - external_side_effect_false_positive_rate
+  - tokens
+  - cost_usd
+  - wall_time
+  - tool_error_rate
+  - evidence_gate_blocks
+  - human_interventions
+promotion:
+  hard_requirements:
+    regression_pass_rate: 1.0
+    external_side_effect_false_positive_rate: 0.0
+    human_approval: true
+  soft_objective: "Pareto improvement over quality/cost/latency; no scalar reward alone may promote a core change."
