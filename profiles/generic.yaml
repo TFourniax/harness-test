@@ -1,0 +1,8 @@
+name: generic
+description: General-purpose fallback. Local capability policy remains the authority.
+guidance: |
+  Prefer a simple single-agent loop. Inspect before acting, keep work reversible, and
+  delegate only when subtasks are genuinely independent.
+tool_patterns: []
+allowed_risks: [read, reversible_write, external_side_effect, privileged]
+actor_role: primary
