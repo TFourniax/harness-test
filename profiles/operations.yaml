@@ -1,0 +1,10 @@
+name: operations
+description: Project/business operations and cross-system execution.
+match_terms: [operate, operations, pilotage, piloter, crm, email, calendar, deploy, deployment, production, client, projet, project, workflow]
+guidance: |
+  Reconcile current authoritative state before external changes. Present exact deltas,
+  preserve idempotency, and use the human approval boundary for externally visible or
+  privileged effects.
+tool_patterns: []
+allowed_risks: [read, reversible_write, external_side_effect, privileged]
+actor_role: primary
