@@ -1,0 +1,31 @@
+diff --git a/README.md b/README.md
+index 459947e..6388a6d 100644
+--- a/README.md
++++ b/README.md
+@@ -4,7 +4,7 @@ A model-agnostic reference harness for long-lived AI agents that can research, s
+ 
+ The design target is not “maximum autonomy”. It is **maximum useful autonomy under measurable evidence, bounded capabilities, independent verification, durable state, and human-governed self-evolution**.
+ 
+-> Status: frontier reference implementation, 16 August 2026. The core is executable and currently passes **46/46 reference tests**; production hardening targets are explicitly separated from what is already implemented.
++> Status: frontier reference implementation, 17 August 2026. The core is executable and currently passes **54/54 reference tests**. v0.3 adds a sparse, cost-aware hierarchical team runtime rather than enabling a full-broadcast swarm by default; production hardening targets remain explicitly separated from what is already implemented.
+ 
+ ## The four loops
+ 
+@@ -51,7 +51,12 @@ The loops are deliberately separated:
+ - **MCP 2026-07-28 adapter:** stateless per-request protocol metadata, required HTTP routing headers, namespacing, pagination, MRTR surfacing, and **default-deny import**: a remote MCP tool is invisible until a local risk/scope policy explicitly authorizes it.
+ - **Layered memory:** episodic traces are separate from procedural memory. Interactive sessions can persist bounded conversation context, while procedural knowledge lives separately. SQLite reference adapters can be replaced by Postgres/vector retrieval.
+ - **File-backed skills:** versionable `SKILL.md` packages are retrieved only when relevant and stay advisory to policy.
+-- **Conditional delegation:** parallel child agents exist for independent breadth-first subtasks, not as a default architecture.
++- **Sparse hierarchical team runtime:** the parent can invoke `team_orchestrate` for genuinely decomposable work. A lead planner builds a dependency DAG, independent specialists execute in parallel, a synthesizer evaluates evidence and can reopen only targeted gaps for another round. A deterministic complexity gate avoids spending any model tokens on obviously simple requests.
++- **Cost-aware worker routing:** workers start on the cheap role when justified, but routing is learned from the harness's own success/cost traces by task family and difficulty bucket. Critical work stays on the primary tier; weak cheap-model performance causes future escalation without changing prompts.
++- **Vector work cache:** verified exact work can be reused directly; very-high-similarity verified stable work may be reused semantically; lower-similarity or unverified results become hints only. Volatile/web-derived results are never eligible for semantic direct reuse. Cache keys are isolated by workspace fingerprint and TTL/freshness class.
++- **Context capsules + sparse communication:** each specialist receives only the root goal, its bounded subtask, constraints, relevant dependency summaries, and an optional prior analogue. It does not receive every peer transcript. This avoids the token multiplication of broadcast MoA topologies.
++- **Read-only specialist execution:** team workers can inspect and execute inside a disposable Docker copy of the workspace, but the host checkout is mounted read-only and the child registry excludes host-write tools. The parent remains the only normal authority for real writes and side effects.
++- **Conditional delegation:** direct parallel child delegation remains available for simple breadth-first fan-out; `team_orchestrate` is the stronger plan→parallel work→synthesis→targeted follow-up loop for complex tasks.
+ - **Independent jury:** optional multi-model grader with de-anchoring: each judge derives its ideal answer before seeing the candidate.
+ - **Self-improvement engine:** repeated trace symptoms → one minimal patch → isolated checkout → deterministic regressions → basic security checks → proposal artifact. Candidate code cannot rewrite its trusted exam or promotion path.
+ - **Skill quarantine:** successful trajectories can become skill candidates only after repeated evidence across distinct goals, poisoning-oriented static checks, and explicit human approval.
+@@ -155,7 +160,7 @@ The architecture synthesizes evidence from agent harness work rather than copyin
+ - AgentLens and 2026 judge/reward-hacking work: a passing result or agreeable LLM judge is not sufficient evidence of a sound trajectory.
+ - MCP 2026-07-28: stateless, capability-bearing tool interoperability.
+ 

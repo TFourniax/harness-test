@@ -25,15 +25,23 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply staged source upgrade if present
+      - name: Apply verified staged v0.3 source upgrade
         shell: bash
         run: |
           set -euo pipefail
-          if [[ -f .github/upgrade-v0.3.patch.gz ]]; then
-            gzip -dc .github/upgrade-v0.3.patch.gz | git apply --check -
-            gzip -dc .github/upgrade-v0.3.patch.gz | git apply -
-            rm .github/upgrade-v0.3.patch.gz
+          if compgen -G ".github/upgrade-v0.3.mod.part-*" > /dev/null; then
+            cat .github/upgrade-v0.3.mod.part-* > /tmp/v0.3-mod.patch
+            echo "5c8bf346d0c9cff4426c85025f60c4ed565ee1db31d3afabe096b8d8d4970f2c  /tmp/v0.3-mod.patch" | sha256sum -c -
+            git apply --check /tmp/v0.3-mod.patch
+            git apply /tmp/v0.3-mod.patch
           fi
+          if compgen -G ".github/upgrade-v0.3.new.part-*" > /dev/null; then
+            cat .github/upgrade-v0.3.new.part-* > /tmp/v0.3-new.patch
+            echo "94185caa140518b3ff2d2093dfcd3602b6b3378122c77036db3996411892a4b2  /tmp/v0.3-new.patch" | sha256sum -c -
+            git apply --check /tmp/v0.3-new.patch
+            git apply /tmp/v0.3-new.patch
+          fi
+          rm -f .github/upgrade-v0.3.mod.part-* .github/upgrade-v0.3.new.part-* .github/upgrade-v0.3.patch.gz
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -145,7 +153,7 @@ jobs:
           )
           rm -rf artifacts/package-verify
 
-      - name: Commit verified binary snapshot to branch
+      - name: Commit verified source and binary snapshot to branch
         shell: bash
         run: |
           set -euo pipefail
