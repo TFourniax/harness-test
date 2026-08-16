@@ -18,8 +18,7 @@ HARNESS_RUNTIME_SELF_WRITE_PROTECTED = (
 
 # Narrower set that the self-improvement pipeline itself may not promote. The shell
 # can evolve, but authorization, durable ledgers, promotion, sandbox/tool boundaries,
-# provider credential boundary, human-channel trust boundary, and the trusted exam
-# remain outside self-promotion.
+# provider credential boundary, and the trusted exam remain outside self-promotion.
 IMMUTABLE_FROM_SELF_EVOLUTION = (
     "tests/",
     "evals/",

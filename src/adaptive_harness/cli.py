@@ -78,6 +78,8 @@ def _maybe_auto_maintain(cfg, provider, traces) -> Path | None:
 
     out = _resolved_path(cfg.harness_root, cfg.maintenance_out)
     out.mkdir(parents=True, exist_ok=True)
+    # Avoid repeatedly spending critic/eval budget while an equivalent proposal is
+    # already awaiting or has received human review.
     for existing in out.glob("*.json"):
         try:
             proposal = ImprovementProposal.model_validate_json(existing.read_text(encoding="utf-8"))
@@ -490,6 +492,7 @@ def telegram_channel(
         )
     except KeyboardInterrupt:
         print("Telegram channel stopped.")
+
 
 
 @app.command()

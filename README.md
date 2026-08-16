@@ -4,7 +4,7 @@ A model-agnostic reference harness for long-lived AI agents that can research, s
 
 The design target is not “maximum autonomy”. It is **maximum useful autonomy under measurable evidence, bounded capabilities, independent verification, durable state, and human-governed self-evolution**.
 
-> Status: frontier reference implementation, 16 August 2026. The core is executable and currently passes **45/45 reference tests**; production hardening targets are explicitly separated from what is already implemented.
+> Status: frontier reference implementation, 16 August 2026. The core is executable and currently passes **46/46 reference tests**; production hardening targets are explicitly separated from what is already implemented.
 
 ## The four loops
 

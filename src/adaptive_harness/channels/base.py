@@ -17,6 +17,7 @@ class ChannelPrincipal:
 
     @property
     def session_id(self) -> str:
+        # Delimit each component so one channel can never collide with another.
         return f"channel:{self.channel}:{self.conversation_id}:{self.user_id}"
 
 
@@ -88,6 +89,9 @@ class AgentChannelGateway:
                 )
             ]
 
+        # Channel approvals are scoped to the exact session that created them.
+        # An authorized user must not be able to approve another user's run by
+        # obtaining/guessing its approval UUID.
         checkpoint = self.traces.load_checkpoint(approval.run_id)
         if not checkpoint:
             return [

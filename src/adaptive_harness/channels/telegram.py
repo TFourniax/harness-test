@@ -32,6 +32,8 @@ class TelegramAccessPolicy:
     allow_group_chats: bool = False
 
     def authorized(self, *, user_id: int, chat_id: int, chat_type: str) -> bool:
+        # A general-purpose agent is too powerful to expose as an open public bot.
+        # At least one explicitly allowlisted human is therefore mandatory.
         if not self.allowed_user_ids or user_id not in self.allowed_user_ids:
             return False
         if chat_type != "private" and not self.allow_group_chats:
@@ -48,6 +50,7 @@ class TelegramBotClient:
         if not token.strip():
             raise ValueError("Telegram bot token is empty")
         self.poll_timeout_seconds = poll_timeout_seconds
+        # Never expose this base URL in logs: it contains the bot secret.
         self._client = httpx.AsyncClient(
             base_url=f"https://api.telegram.org/bot{token}",
             timeout=httpx.Timeout(float(poll_timeout_seconds) + 15.0),
@@ -61,7 +64,9 @@ class TelegramBotClient:
             response = await self._client.post(f"/{method}", json=payload)
             response.raise_for_status()
             body = response.json()
-        except (httpx.HTTPError, ValueError):
+        except (httpx.HTTPError, ValueError) as exc:
+            # Deliberately avoid propagating httpx's URL representation because
+            # the Bot API token is part of the request URL.
             raise TelegramAPIError(f"Telegram {method} transport failure") from None
         if not body.get("ok"):
             code = body.get("error_code", "unknown")
@@ -89,6 +94,8 @@ class TelegramBotClient:
         chunks = chunk_telegram_text(text)
         for index, chunk in enumerate(chunks):
             payload: dict[str, Any] = {"chat_id": chat_id, "text": chunk}
+            # Attach the approval buttons only to the last chunk so context is
+            # read before a potentially consequential click.
             if approval_id and index == len(chunks) - 1:
                 payload["reply_markup"] = approval_keyboard(approval_id)
             await self._call("sendMessage", payload)
@@ -119,6 +126,8 @@ def chunk_telegram_text(text: str, limit: int = 3900) -> list[str]:
 def approval_keyboard(approval_id: str) -> dict[str, Any]:
     approve = CALLBACK_PREFIX_APPROVE + approval_id
     reject = CALLBACK_PREFIX_REJECT + approval_id
+    # Telegram currently limits callback_data to 64 bytes. Approval IDs are UUIDs,
+    # so both values remain comfortably below that bound.
     if len(approve.encode("utf-8")) > 64 or len(reject.encode("utf-8")) > 64:
         raise ValueError("approval callback exceeds Telegram callback_data limit")
     return {
@@ -175,6 +184,9 @@ class TelegramChannelRunner:
                     try:
                         await self.handle_update(update)
                     except Exception:
+                        # Do not advance the durable cursor on a processing failure.
+                        # The update is retried after reconnect/restart; consequential
+                        # tool effects are still protected by the runtime ledger.
                         raise
                     offset = update_id + 1
                     self.traces.set_channel_cursor("telegram", offset)
@@ -247,6 +259,8 @@ class TelegramChannelRunner:
             conversation_id=str(chat_id),
             user_id=str(user_id),
         )
+        # Telegram requires callback queries to be answered promptly. Confirm the
+        # click first; the actual approval still goes through the harness gateway.
         await self.client.answer_callback_query(
             callback_id, "Validation reçue" if approved else "Refus reçu"
         )
@@ -279,4 +293,6 @@ async def run_telegram_channel(
         traces=traces,
         access=access,
     )
+    # Keep the top-level coroutine explicit so service managers can restart the
+    # process on network/provider faults without hiding errors in background tasks.
     await runner.run_forever()
