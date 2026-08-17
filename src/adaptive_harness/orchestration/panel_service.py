@@ -135,8 +135,6 @@ class IndependenceAwarePanelRunner:
     def _role_for(self, spec: CellSpec, slot_index: int) -> str:
         if self.config.cheap is None:
             return "primary"
-        # First attempt is efficient unless the task is intrinsically critical/hard. Later attempts
-        # deliberately add model-role diversity only when the task justifies paying for it.
         threshold = 0.82
         if self.config.team is not None:
             threshold = self.config.team.economy.primary_preferred_difficulty
@@ -160,6 +158,14 @@ class IndependenceAwarePanelRunner:
             if role == "cheap"
             else economy.cold_start_primary_call_usd
         )
+
+    def _affordable_role(self, preferred: str, remaining_budget_usd: float) -> str | None:
+        if self._expected_cost(preferred) <= remaining_budget_usd + 1e-12:
+            return preferred
+        if preferred == "primary" and self.config.cheap is not None:
+            if self._expected_cost("cheap") <= remaining_budget_usd + 1e-12:
+                return "cheap"
+        return None
 
     @staticmethod
     def _work_item(spec: CellSpec) -> WorkItem:
@@ -208,18 +214,18 @@ class IndependenceAwarePanelRunner:
         )
         certificate = self.verifier.certify(self._work_item(spec), [result])
         answer = result.answer or f"attempt ended {result.status.value}"
-        confidence = 0.84 if result.status == RunStatus.SUCCEEDED and role == "primary" else 0.74
-        if result.status != RunStatus.SUCCEEDED:
-            confidence = 0.06
+        succeeded = result.status == RunStatus.SUCCEEDED
+        confidence = 0.84 if succeeded and role == "primary" else 0.74 if succeeded else 0.06
         if certificate.verdict == VerificationVerdict.REFUTED:
             confidence = min(confidence, 0.10)
-        elif certificate.verdict == VerificationVerdict.VERIFIED:
+        elif certificate.verdict == VerificationVerdict.VERIFIED and succeeded:
             confidence = max(confidence, 0.94)
         return result, PanelAttempt(
             method_id=method_id,
             model_role=role,
             model_id=self._model_id(role),
             answer=answer,
+            succeeded=succeeded,
             cost_usd=max(0.0, float(result.reported_cost_usd)),
             confidence=confidence,
             evidence_refs=list(dict.fromkeys(obs.call_id for obs in result.observations if obs.ok)),
@@ -240,9 +246,11 @@ class IndependenceAwarePanelRunner:
         total_cost = 0.0
 
         for slot_index in range(1, min(self.max_panel_attempts, len(methods)) + 1):
-            role = self._role_for(spec, slot_index)
-            expected_cost = self._expected_cost(role)
             remaining = max(0.0, allowance_usd - total_cost)
+            role = self._affordable_role(self._role_for(spec, slot_index), remaining)
+            if role is None:
+                break
+            expected_cost = self._expected_cost(role)
             if slot_index > 1:
                 decision = self.market.decide(
                     profile=spec.profile,
@@ -268,12 +276,6 @@ class IndependenceAwarePanelRunner:
                 remaining_budget_usd=remaining,
             )
             total_cost += panel_attempt.cost_usd
-            if total_cost > allowance_usd + 1e-12:
-                # CellRuntime will enforce the hard escrow too; stop here so no further call is bought.
-                attempts.append(panel_attempt)
-                run_results.append(result)
-                break
-
             prior_attempts = list(attempts)
             attempts.append(panel_attempt)
             run_results.append(result)
@@ -290,10 +292,12 @@ class IndependenceAwarePanelRunner:
                     )
                 )
             combined_before = combined_after
+            if total_cost > allowance_usd + 1e-12:
+                break
 
         if not attempts:
             return LeafOutcome(
-                answer="No panel attempt slot was available.",
+                answer="No affordable panel attempt slot was available.",
                 success=False,
                 cost_usd=0.0,
                 confidence=0.0,
@@ -315,13 +319,10 @@ class IndependenceAwarePanelRunner:
                 selected=record.attempt is selected,
             )
 
-        # No majority vote: one task-relevant deterministic failure in the combined evidence can make
-        # the whole panel non-successful even if another model confidently asserted the opposite.
-        selected_success = selected.verification.verdict != VerificationVerdict.REFUTED
         combined_safe = final_certificate.verdict != VerificationVerdict.REFUTED
-        success = bool(selected_success and combined_safe)
+        success = bool(selected.succeeded and combined_safe)
         confidence = selected.confidence
-        if final_certificate.verdict == VerificationVerdict.VERIFIED:
+        if final_certificate.verdict == VerificationVerdict.VERIFIED and selected.succeeded:
             confidence = max(confidence, 0.95)
         elif final_certificate.evidence_strength < 0.20:
             confidence = min(confidence, 0.70)
