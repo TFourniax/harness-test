@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -25,6 +24,7 @@ class PanelAttempt(BaseModel):
     model_role: str
     model_id: str = ""
     answer: str
+    succeeded: bool = True
     cost_usd: float = Field(default=0.0, ge=0.0)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
     evidence_refs: list[str] = Field(default_factory=list)
@@ -77,18 +77,16 @@ class IndependenceScorer:
         candidate_evidence = set(candidate.evidence_refs)
         prior_evidence = set(prior.evidence_refs)
         evidence = self._evidence_novelty(candidate_evidence, prior_evidence)
-
         a = self.vectorizer.encode(candidate.answer)
         b = self.vectorizer.encode(prior.answer)
         cosine = self.vectorizer.cosine(a, b)
-        # Negative hashing-vector cosine should not create >100% novelty.
         answer = _clamp(1.0 - max(0.0, cosine))
         method = 1.0 if candidate.method_id != prior.method_id else 0.0
         model = 1.0 if (
             candidate.model_role != prior.model_role
             or (candidate.model_id and prior.model_id and candidate.model_id != prior.model_id)
         ) else 0.0
-        score = _clamp(0.50 * evidence + 0.25 * answer + 0.15 * method + 0.10 * model)
+        score = _clamp(0.55 * evidence + 0.20 * answer + 0.15 * method + 0.10 * model)
         return IndependenceBreakdown(
             score=score,
             evidence_novelty=evidence,
@@ -109,8 +107,6 @@ class IndependenceScorer:
                 model_novelty=1.0,
             )
         pairs = [self.pair(candidate, prior) for prior in prior_attempts]
-        # Conservative: the candidate must be meaningfully different from every existing channel,
-        # not merely very different from one of them.
         return IndependenceBreakdown(
             score=min(item.score for item in pairs),
             evidence_novelty=min(item.evidence_novelty for item in pairs),
@@ -136,8 +132,6 @@ class MarginalStats:
 
 
 class MarginalDiversityStore:
-    """Persist measured marginal value of the Nth real attempt for one task bucket."""
-
     def __init__(self, path: str | Path) -> None:
         self.path = str(path)
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
@@ -228,13 +222,6 @@ class MarginalDiversityStore:
 
 
 class MarginalDiversityMarket:
-    """Buy another attempt only when expected *new verification* justifies marginal cost.
-
-    Diversity itself is not a reward. It is an opportunity signal. The learner is updated from actual
-    increases in verification certificate strength/score/coverage, preventing stylistic disagreement
-    from becoming a target the agents can game.
-    """
-
     def __init__(
         self,
         store: MarginalDiversityStore,
@@ -257,7 +244,6 @@ class MarginalDiversityMarket:
 
     @staticmethod
     def _prior(slot_index: int, difficulty: float, critical: bool) -> tuple[float, float]:
-        # Priors deliberately decay with panel depth; empirical evidence replaces them quickly.
         base_gain = 0.11 + 0.13 * _clamp(difficulty) + (0.08 if critical else 0.0)
         base_independence = 0.48 + 0.12 * _clamp(difficulty)
         if slot_index >= 3:
@@ -308,7 +294,6 @@ class MarginalDiversityMarket:
                 utility=-self.cost_weight * expected_cost,
                 reason="current result already has strong task-bound verified evidence",
             )
-
         bucket = self.bucket(profile, difficulty, critical)
         stats = self.store.stats(bucket, slot_index)
         prior_gain, prior_independence = self._prior(slot_index, difficulty, critical)
@@ -317,7 +302,6 @@ class MarginalDiversityMarket:
             expected_gain = stats.verification_gain
             expected_independence = stats.independence
             empirical_cost = stats.cost_usd if stats.cost_usd > 0 else expected_cost
-            # Use empirical cost conservatively when it exceeds the estimate.
             expected_cost = max(expected_cost, empirical_cost)
         elif stats:
             weight = samples / self.min_samples
@@ -328,8 +312,6 @@ class MarginalDiversityMarket:
         else:
             expected_gain = prior_gain
             expected_independence = prior_independence
-
-        # Expected marginal value requires both a likely verification gain and a distinct channel.
         useful_gain = expected_gain * (0.45 + 0.55 * expected_independence)
         utility = useful_gain - self.cost_weight * expected_cost
         if stats and samples >= self.min_samples and expected_independence < self.redundancy_floor:
@@ -414,11 +396,11 @@ def certificate_rank(certificate: VerificationCertificate) -> tuple[float, ...]:
 def evidence_first_select(attempts: list[PanelAttempt]) -> PanelAttempt:
     if not attempts:
         raise ValueError("cannot select from an empty panel")
-    # Cost is a tie-break only after evidence/correctness signals.
     return max(
         attempts,
         key=lambda attempt: (
             *certificate_rank(attempt.verification),
+            1.0 if attempt.succeeded else 0.0,
             attempt.confidence,
             -attempt.cost_usd,
         ),
