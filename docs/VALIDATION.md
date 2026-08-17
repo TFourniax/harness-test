@@ -1,35 +1,43 @@
 # Validation Snapshot
 
 Date: 2026-08-17
-Version: **0.5.0**
+Version: **0.7.0**
 
-This document records what the automated build has actually checked. It is intentionally narrower than a production certification or a universal performance claim.
+This document records what the automated reference build has actually checked. It is narrower than a
+production certification and deliberately avoids claims of universal quality/cost superiority.
 
-## Current reference suite
+## Final v0.7 package validation
 
-The first complete v0.5 source snapshot passed:
+The direct-source v0.7 release pipeline completed successfully:
 
-- `pytest -q`: **83 passed**;
-- `python -m compileall -q src tests`;
-- Ruff critical-error checks (`E9,F63,F7,F82`);
-- installation and `0.5.0` package/entrypoint resolution;
-- deterministic source-manifest generation;
-- deterministic ZIP generation;
-- extraction into a clean directory;
-- the complete **83-test + compile + Ruff** validation again from the extracted ZIP.
+- package/console entrypoint resolved as **0.7.0 / `adaptive_harness.v07_cli:app`**;
+- `pytest -q`: **132 passed**;
+- `python -m compileall -q src tests`: passed;
+- Ruff critical-error checks (`E9,F63,F7,F82`): passed;
+- deterministic source manifest generated from committed source;
+- deterministic `artifacts/adaptive-agent-harness-0.7.0.zip` built;
+- ZIP size in the validated run: **235454 bytes**;
+- the ZIP was extracted into a clean directory;
+- the complete **132-test + compile + Ruff** validation passed again from the extracted archive;
+- GitHub Actions committed the verified snapshot back to the branch.
 
-The final acceptance run is also required to execute directly from committed source without a staging overlay.
+Final v0.7 ZIP SHA-256:
 
-## Existing trust/runtime coverage
+```text
+9d20478bc855e88c4f920cf7a2a4359232859aed6d56bb218aeac468a8b72fd2
+```
 
-The retained suite covers the previously implemented capability and execution boundaries, including:
+## Core trust/runtime coverage retained
+
+The suite continues to cover:
 
 - capability policy and profile ceilings;
 - exact high-impact approval and resume;
-- non-idempotent execution ledger;
-- evidence gate and blind high-impact verification;
+- independent high-impact verification;
+- non-idempotent execution ledger and uncertain-completion reconciliation;
+- evidence gate;
 - session persistence;
-- tool-schema validation;
+- tool JSON-schema validation;
 - HTTP SSRF/private-destination and redirect handling;
 - default-deny MCP import and schema fingerprint checks;
 - runtime self-write firewall;
@@ -38,141 +46,159 @@ The retained suite covers the previously implemented capability and execution bo
 - skill quarantine;
 - Telegram default-deny access, durable cursor/session identity and cross-session approval protection.
 
-## Sparse team coverage retained
+## Evidence-grounded compute coverage retained
 
-Tests continue to cover:
+v0.5/v0.6 tests remain part of the v0.7 suite and cover:
 
-- zero-token rejection of obviously simple team work;
-- sparse dependency-DAG planning;
-- concurrent independent workers;
-- bounded context capsules instead of broadcast peer transcripts;
-- targeted follow-up rounds;
-- child-attempt accounting against `max_agents`;
-- parent-level nested model-cost accounting;
-- cheap/primary routing fallback paths;
-- read-only specialist capability with persistent host-write tools removed from child registries.
+- verification certificates bound to the assigned task;
+- model-only success carrying very weak evidence weight;
+- deterministic failures producing refutation;
+- unrelated passing checks not laundering unrelated claims;
+- process-aware confidence calibration;
+- evidence-weighted compute-market learning and temporal decay;
+- hard remaining-dollar budget semantics;
+- adaptive follow-up when confidence is high but evidence is weak;
+- guarded multi-space semantic reuse;
+- paired benchmark policy comparison;
+- human promotion bound to the exact benchmark comparison fingerprint;
+- paired/bootstrap Policy Lab uncertainty above the Policy Arena.
 
-## v0.4 economic/cache coverage retained
+## Durable Mission Plane — v0.6 coverage
 
-The v0.4 tests remain in the v0.5 suite and cover:
+Tests validate:
 
-- cold-start compute shape selection;
-- cheap single/pair, primary and mixed-pair paths;
-- slot-aware pair downgrade;
-- high-confidence stop behavior;
-- budget pressure;
-- stateful routing outcomes;
-- multi-space intent/procedure/entity/full cache representation;
-- procedural synonym canonicalization;
-- entity mismatch demotion to reference-only;
-- workspace fingerprint isolation;
-- negative cache-feedback threshold tightening.
+- canonical mission state outside model context;
+- optimistic mission revisions and stale-write rejection;
+- task dependencies constraining completion;
+- hard mission task-count ceiling;
+- bounded mission context packing;
+- parent-write / child-read state-tool split;
+- evidence IDs resolving only to real executed trace observations;
+- invented evidence references being rejected;
+- evidence freshness relative to mission/task creation;
+- `DONE` requiring a sufficiently strong task-relevant certificate;
+- unrelated global mission revision changes being reconcilable only when the target task contract is
+  unchanged.
 
-## v0.5 verification-certificate coverage
+## Distributed Reasoning Cells — v0.7 coverage
 
-New deterministic tests cover:
-
-- strong task-bound deterministic passes;
-- task-relevant deterministic failures producing refutation;
-- multi-source external support;
-- model-only success receiving very weak evidence weight;
-- a task-unrelated compile/build check **not** being allowed to certify unrelated research or advisory work;
-- verification metadata and evidence references being preserved in reports.
-
-The relevance calculation is deliberately based on the assigned task/profile rather than allowing a verification command's own claim text to declare itself relevant.
-
-## v0.5 evidence tools
-
-Tests cover the verification command allowlist and rejection of arbitrary commands from the deterministic-verification lane.
-
-`verify_workspace_command` is constrained to recognized test/lint/typecheck/compile/build families and runs through the disposable read-only-host sandbox primitive. `source_fetch` keeps retrieved content untrusted while attaching provenance metadata.
-
-Real Docker execution is not exercised by the GitHub-hosted reference suite when the required audited/preinstalled images are unavailable; the policy/registration/classification path is still tested.
-
-## v0.5 confidence calibration
+### Recoverable leases
 
 Tests cover:
 
-- shrinking raw model confidence when evidence is weak;
-- lifting confidence when strong deterministic evidence is present;
-- capping confidence after deterministic refutation;
-- failed/unresolved trajectory penalties;
-- the labelled calibration store being separate from live self-labelled success.
+- one active lease per mission/task;
+- competing owner rejection;
+- TTL expiry and recovery;
+- heartbeat extension;
+- wrong-owner finish rejection;
+- completed/released/expired states;
+- `ACTIVE` mission work being auto-requeued only when concrete dispatcher lease history expired;
+- `ACTIVE` work with no dispatcher lease history remaining untouched.
 
-A raw synthesis confidence value is therefore not treated as a correctness certificate.
-
-## v0.5 evidence-weighted compute market
-
-Tests cover:
-
-- model-only/weak-evidence outcomes having little routing influence;
-- repeated strong-evidence failure being able to overturn a cheap strategy;
-- evidence mass and success mass persistence;
-- day-scale temporal forgetting;
-- no meaningless sub-minute numerical decay;
-- hard budget semantics: if no compute shape fits remaining budget, the market stops even on critical work;
-- actual child/provider cost remaining charged to the parent budget after execution.
-
-## v0.5 adaptive evidence loop
-
-A dedicated test covers the case where raw synthesis confidence is high but the trajectory is weakly evidenced. When slots/round/budget allow, the orchestrator can reopen one bounded verification-focused follow-up instead of treating confidence alone as completion.
-
-## v0.5 policy arena
+### Hierarchical dollar escrow
 
 Tests cover:
 
-- live/shadow observations not being sufficient for promotion;
-- paired benchmark trials on matching task keys;
-- minimum evidence strength for benchmark contribution;
-- quality/cost/pass-rate comparison gates;
-- exact comparison fingerprint generation;
-- promotion only with the reviewed exact fingerprint;
-- stale fingerprint rejection after comparison data changes.
+- root and child escrow creation;
+- sibling reservations not over-allocating their parent;
+- charges never exceeding currently available allowance;
+- nested child reservations;
+- child settlement propagating only **actual spend** upward;
+- unused reservation returning to the parent;
+- cancellation of untouched reservations;
+- refusal to settle a parent while open child reservations remain.
 
-The policy arena can change economic preferences only; it cannot expand capabilities, approvals, agent limits, round limits or cost ceilings.
+### Cell runtime
 
-## v0.5 trust-kernel protection
+Tests cover:
 
-The self-evolution immutable set now includes the components that decide what counts as verification/evidence and what compute policy may be promoted:
+- separate `max_cells` and `max_leaf_attempts` accounting;
+- two child cells creating two real leaf attempts rather than counting the orchestration node as a
+  third worker;
+- parallel child execution;
+- planner cost charged before child budget split;
+- one-child decomposition collapsing back to a direct leaf;
+- leaf spend being unable to exceed its escrow;
+- leaf-attempt exhaustion producing `BLOCKED`, not false success;
+- executed analytical disagreement/failure producing `PARTIAL`, not `COMPLETE`;
+- `success=True` being reserved for `COMPLETE` cells.
 
-- evidence tools;
-- verification engine;
-- confidence calibration;
-- compute market;
-- policy arena;
-- benchmark runner;
-- v0.5 CLI/control wiring.
+### LLM hierarchy adapter
 
-These components may be changed by normal reviewed development, but not silently auto-promoted by the harness itself.
+Tests cover:
 
-## Not yet proven / not live-tested
+- deterministic zero-token rejection of flat work even when it is difficult;
+- structured difficult work becoming eligible for hierarchy;
+- duplicate proposed child tasks being normalized/deduplicated;
+- fewer than two distinct children collapsing to direct leaf execution;
+- hierarchical child IDs and budget weights;
+- leaf `Goal.max_cost_usd` exactly matching the leaf escrow allowance;
+- cheap/primary role selection without granting new capabilities.
 
-v0.5 deliberately does **not** claim:
+### Mission Dispatcher
 
-- statistically meaningful dollar/token superiority on representative OpenRouter, Replicate, Anthropic, OpenAI-compatible or other provider workloads;
-- universal quality superiority over sparse v0.4, Hermes, broadcast MoA or another public/private harness;
-- calibrated real-provider prompt/KV-cache hit rates;
+Tests cover:
+
+- leasing and activating exactly one dependency-ready task;
+- bounded mission-context delivery;
+- verified `COMPLETE` computation finalizing the durable task;
+- model-only apparent completion becoming `BLOCKED` rather than `DONE`;
+- resource-blocked cells never finalizing durable state;
+- expired lease recovery;
+- unrelated mission revision advancement being safely rebased only when the target task contract is
+  unchanged;
+- loss of ownership preventing commit;
+- `mission_dispatch_next` requiring the exact just-read `expected_revision` and using the existing
+  non-idempotent execution ledger.
+
+### Trust-kernel protection
+
+The immutable self-evolution boundary now includes the v0.7 coordination plane:
+
+- distributed-control leases/escrow;
+- cell runtime;
+- mission dispatcher;
+- hierarchy adapter;
+- v0.7 config/CLI;
+- the existing state, verification, compute-policy, approval, evaluation and promotion components.
+
+These files can be changed through normal reviewed development, but cannot be silently auto-promoted by
+the harness itself.
+
+## Not live-tested / not yet proven
+
+v0.7 deliberately does **not** claim:
+
+- statistically meaningful dollar/token superiority on representative OpenRouter, Replicate,
+  Anthropic, OpenAI-compatible or other provider workloads;
+- universal superiority over one strong primary agent, sparse flat teams, Hermes, fixed broadcast MoA
+  or another harness;
+- that recursion is beneficial for every difficult task;
+- calibrated production prompt/KV-cache hit rates;
 - production semantic-cache false-direct-reuse rate over a representative trace corpus;
-- production hostile-code isolation; microVM/gVisor/Firecracker-class controls remain a stronger target than the reference Docker sandbox;
-- production-scale Qdrant/pgvector/custom vector backend performance;
-- persistent multi-agent code-writing worktrees with merge/rebase arbitration;
-- a complete external long-horizon Manage–Execute–Audit task-state plane;
-- that source diversity alone proves factual correctness;
-- that a passing deterministic command proves claims outside the check's covered scope.
+- production hostile-code isolation; microVM/gVisor/Firecracker-class controls remain a stronger target
+  than the reference Docker path;
+- real external side-effect adapter safety without staging/provider-specific acceptance tests;
+- production-scale Postgres/Qdrant/queue performance;
+- that source diversity or agent disagreement alone proves factual correctness.
 
-## Next empirical acceptance gate
+## Next empirical gate
 
-On held-out real workloads, compare at minimum:
+Held-out benchmarks should compare at least:
 
-1. single primary agent;
-2. single cheap agent;
-3. fixed N-agent broadcast MoA;
-4. sparse v0.3;
-5. adaptive v0.4;
-6. v0.5 with semantic direct reuse disabled;
-7. full v0.5;
-8. challenger policies proposed by the policy arena.
+1. single primary;
+2. single cheap;
+3. fixed homogeneous N-agent broadcast;
+4. sparse flat team;
+5. v0.5 evidence-grounded adaptive compute;
+6. v0.6 durable mission plane without recursive cells;
+7. v0.7 distributed reasoning cells;
+8. v0.7 with hierarchy forcibly disabled;
+9. future independence-aware marginal-compute policy.
 
-Use domain-grounded deterministic/oracle evidence where possible. Track task success, evidence strength, input/output/cached tokens, dollars, latency, child attempts, rounds, cache direct/reference hits, false direct-reuse, quality gain per dollar and human intervention.
+Track task success using domain-grounded/oracle evidence where possible, evidence strength, dollars,
+input/output/cached tokens, latency, real leaf attempts, cells opened, hierarchy depth, lease recovery,
+blocked/partial rates, cache reuse safety, quality gain per dollar and human intervention.
 
-Keep held-out benchmark truth outside candidate-writable boundaries. A future policy becomes champion only through reproducible paired evidence and an exact reviewed promotion fingerprint.
+Held-out truth must stay outside candidate-writable boundaries. A learned orchestration policy remains a
+challenger until reproducible evidence and the exact human-governed promotion gate approve it.
