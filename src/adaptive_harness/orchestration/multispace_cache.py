@@ -22,6 +22,32 @@ _PROCEDURE_TERMS = {
     "verify", "write", "architecture", "routing", "cache", "vector", "sql",
     "python", "javascript", "typescript", "api", "http", "git", "github",
 }
+_PROCEDURE_CANONICAL = {
+    "audit": "inspect",
+    "review": "inspect",
+    "inspect": "inspect",
+    "analyze": "analyze",
+    "analyse": "analyze",
+    "investigate": "research",
+    "research": "research",
+    "search": "research",
+    "scrape": "retrieve",
+    "extract": "retrieve",
+    "debug": "repair",
+    "fix": "repair",
+    "refactor": "repair",
+    "build": "implement",
+    "implement": "implement",
+    "write": "implement",
+    "test": "validate",
+    "validate": "validate",
+    "verify": "validate",
+    "benchmark": "measure",
+    "measure": "measure",
+    "plan": "design",
+    "design": "design",
+    "architecture": "design",
+}
 _ENTITY_RE = re.compile(
     r"https?://[^\s]+|`[^`]+`|(?:[\w.-]+/){1,}[\w.-]+|"
     r"\b(?:[A-Fa-f0-9]{8,}|\d+(?:\.\d+){1,}|\d{3,})\b"
@@ -48,11 +74,12 @@ class MultiSpaceVectorizer:
         tokens = normalized.split()
         entities = set(self.entities(text))
         intent_tokens = [tok for tok in tokens if tok not in entities][:160]
-        procedure_tokens = [
-            tok for tok in tokens
-            if tok in _PROCEDURE_TERMS
-            or tok.endswith((".py", ".js", ".ts", ".tsx", ".sql", ".md", ".json", ".yaml", ".yml"))
-        ]
+        procedure_tokens = []
+        for tok in tokens:
+            if tok in _PROCEDURE_TERMS:
+                procedure_tokens.append(_PROCEDURE_CANONICAL.get(tok, tok))
+            elif tok.endswith((".py", ".js", ".ts", ".tsx", ".sql", ".md", ".json", ".yaml", ".yml")):
+                procedure_tokens.append(tok)
         return {
             "intent": " ".join(intent_tokens),
             "procedure": " ".join(procedure_tokens),
