@@ -99,6 +99,8 @@ class LLMHierarchicalService:
         self.provider = provider
         self.child_runner = child_runner
         self.cells = cells
+        # Optional v0.8 hook. None preserves the exact v0.7 single-leaf behavior.
+        self.panel_leaf_runner = None
 
     def _planner_role(self):
         team = self.config.team
@@ -281,6 +283,7 @@ class LLMHierarchicalService:
             budget_usd=budget_usd,
             planner=self.planner,
             leaf_runner=self.leaf_runner,
+            panel_leaf_runner=self.panel_leaf_runner,
         )
 
 

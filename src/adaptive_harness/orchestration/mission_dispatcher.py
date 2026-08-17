@@ -99,6 +99,8 @@ class MissionDispatcher:
         self.verifier = verifier or VerificationEngine()
         self.lease_ttl_seconds = max(5, int(lease_ttl_seconds))
         self.context_budget_tokens = max(64, int(context_budget_tokens))
+        # Optional v0.8 hook. Durable state semantics stay unchanged when no panel is injected.
+        self.panel_leaf_runner = None
 
     @staticmethod
     def _task_contract(task: MissionTask) -> tuple[Any, ...]:
@@ -396,6 +398,7 @@ class MissionDispatcher:
                 budget_usd=max(0.0, float(budget_usd)),
                 planner=planner,
                 leaf_runner=leaf_runner,
+                panel_leaf_runner=self.panel_leaf_runner,
             )
         except Exception as exc:
             stop.set()
