@@ -4,10 +4,10 @@ from pathlib import Path
 import pytest
 
 from adaptive_harness.orchestration.cell_runtime import (
-    CellLimitExceeded,
     CellLimits,
     CellPlan,
     CellSpec,
+    CellStatus,
     HierarchicalCellRuntime,
     LeafOutcome,
 )
@@ -55,6 +55,7 @@ async def test_two_child_cells_run_as_two_leaf_attempts_not_three(tmp_path: Path
         leaf_runner=leaf,
     )
     assert result.success
+    assert result.status == CellStatus.COMPLETE
     assert result.cells_opened == 3
     assert result.leaf_attempts == 2
     assert result.cost_usd == pytest.approx(0.02)
@@ -92,6 +93,7 @@ async def test_children_are_scheduled_concurrently(tmp_path: Path):
         leaf_runner=leaf,
     )
     assert result.success
+    assert result.status == CellStatus.COMPLETE
     assert started == {"a", "b"}
 
 
@@ -116,6 +118,7 @@ async def test_single_child_plan_falls_back_to_parent_leaf(tmp_path: Path):
         leaf_runner=leaf,
     )
     assert seen == ["root"]
+    assert result.status == CellStatus.COMPLETE
     assert result.leaf_attempts == 1
     assert result.cells_opened == 1
 
@@ -177,7 +180,7 @@ async def test_reported_leaf_spend_cannot_cross_escrow(tmp_path: Path):
 
 
 @pytest.mark.asyncio
-async def test_leaf_attempt_ceiling_counts_real_rollouts(tmp_path: Path):
+async def test_leaf_attempt_ceiling_blocks_incomplete_scheduled_work(tmp_path: Path):
     runtime = _runtime(tmp_path, max_depth=1, max_cells=4, max_leaf_attempts=1)
 
     async def planner(spec, depth, max_children, allowance):
@@ -192,7 +195,8 @@ async def test_leaf_attempt_ceiling_counts_real_rollouts(tmp_path: Path):
         await asyncio.sleep(0)
         return LeafOutcome(answer=spec.id, success=True)
 
-    # One branch may execute, but the second cannot silently create an extra rollout.
+    # One branch may execute, but the second cannot silently create an extra rollout or let the
+    # parent report COMPLETE. The result is explicitly BLOCKED so a mission dispatcher can replan.
     result = await runtime.execute(
         CellSpec(id="root", task="root"),
         owner="lead",
@@ -202,4 +206,37 @@ async def test_leaf_attempt_ceiling_counts_real_rollouts(tmp_path: Path):
     )
     assert result.leaf_attempts == 1
     assert not result.success
+    assert result.status == CellStatus.BLOCKED
+    assert result.blocked_reasons
     assert "CellLimitExceeded" in result.answer
+
+
+@pytest.mark.asyncio
+async def test_analytical_child_failure_is_partial_not_complete(tmp_path: Path):
+    runtime = _runtime(tmp_path, max_depth=1, max_cells=3, max_leaf_attempts=2)
+
+    async def planner(spec, depth, max_children, allowance):
+        return CellPlan(
+            children=[
+                CellSpec(id="a", task="A", decomposable=False),
+                CellSpec(id="b", task="B", decomposable=False),
+            ]
+        )
+
+    async def leaf(spec, allowance):
+        return LeafOutcome(
+            answer=spec.id,
+            success=spec.id == "a",
+            confidence=0.8 if spec.id == "a" else 0.2,
+        )
+
+    result = await runtime.execute(
+        CellSpec(id="root", task="root"),
+        owner="lead",
+        budget_usd=0.05,
+        planner=planner,
+        leaf_runner=leaf,
+    )
+    assert not result.success
+    assert result.status == CellStatus.PARTIAL
+    assert len(result.children) == 2
