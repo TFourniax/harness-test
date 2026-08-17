@@ -32,9 +32,66 @@ jobs:
           if compgen -G ".github/upgrade-v0.3.mod.part-*" > /dev/null; then
             cat .github/upgrade-v0.3.mod.part-* > /tmp/v0.3-mod.patch
             echo "5c8bf346d0c9cff4426c85025f60c4ed565ee1db31d3afabe096b8d8d4970f2c  /tmp/v0.3-mod.patch" | sha256sum -c -
-            git apply --check /tmp/v0.3-mod.patch
-            git apply /tmp/v0.3-mod.patch
+            git apply --check --exclude=config/harness.example.yaml /tmp/v0.3-mod.patch
+            git apply --exclude=config/harness.example.yaml /tmp/v0.3-mod.patch
           fi
+
+          # config/harness.example.yaml differed slightly between the local 0.2 build
+          # snapshot and the GitHub 0.2 snapshot. Apply the semantic v0.3 additions
+          # deterministically rather than weakening patch validation for any other file.
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('config/harness.example.yaml')
+          text = path.read_text(encoding='utf-8')
+
+          cheap = '''# Low-cost worker/orchestrator role. GPT-5 Mini is an example; replace with any model that
+# gives the best price/quality ratio for your workload.
+cheap:
+  model: openrouter/openai/gpt-5-mini
+  temperature: 0.1
+  max_tokens: 3500
+
+'''
+          if '\ncheap:\n' not in text:
+              anchor = '  num_retries: 2\n'
+              if anchor not in text:
+                  raise SystemExit('primary role anchor not found in config/harness.example.yaml')
+              text = text.replace(anchor, anchor + cheap, 1)
+
+          team = '''# Sparse, cost-aware multi-agent team. The parent agent calls team_orchestrate only when
+# decomposition/parallelism has material value. Workers never receive every peer transcript.
+team:
+  enabled: true
+  max_agents: 6
+  max_rounds: 3
+  max_tasks_per_plan: 8
+  worker_max_steps: 18
+  orchestrator_role: cheap
+  synthesizer_role: primary
+  cheap_max_difficulty: 0.62
+  utility_floor: 0.18
+  target_confidence: 0.86
+  max_report_chars: 5000
+  semantic_cache_enabled: true
+  semantic_cache_db: .harness/team-cache.sqlite3
+  # Two-zone vector cache: direct reuse is intentionally strict; lower similarities
+  # are supplied only as hints and must be re-checked by a worker.
+  semantic_direct_threshold: 0.985
+  semantic_reference_threshold: 0.90
+  stable_cache_ttl_seconds: 604800
+  volatile_cache_ttl_seconds: 600
+
+'''
+          if '\nteam:\n' not in text:
+              anchor = 'maintenance_out: .harness/proposals\n'
+              if anchor not in text:
+                  raise SystemExit('maintenance anchor not found in config/harness.example.yaml')
+              text = text.replace(anchor, anchor + '\n' + team, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
           if compgen -G ".github/upgrade-v0.3.new.part-*" > /dev/null; then
             cat .github/upgrade-v0.3.new.part-* > /tmp/v0.3-new.patch
             echo "94185caa140518b3ff2d2093dfcd3602b6b3378122c77036db3996411892a4b2  /tmp/v0.3-new.patch" | sha256sum -c -
