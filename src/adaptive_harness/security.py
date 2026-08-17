@@ -16,9 +16,9 @@ HARNESS_RUNTIME_SELF_WRITE_PROTECTED = (
     "pyproject.toml",
 )
 
-# Narrower set that the self-improvement pipeline itself may not promote. The shell
-# can evolve, but authorization, durable ledgers, promotion, sandbox/tool boundaries,
-# provider credential boundary, and the trusted exam remain outside self-promotion.
+# The self-improvement pipeline may evolve task-solving components, but not the trust,
+# authorization, verification, evaluation or compute-policy-promotion boundaries that
+# decide what counts as evidence or what may become the active policy.
 IMMUTABLE_FROM_SELF_EVOLUTION = (
     "tests/",
     "evals/",
@@ -27,13 +27,20 @@ IMMUTABLE_FROM_SELF_EVOLUTION = (
     "src/adaptive_harness/contracts.py",
     "src/adaptive_harness/config.py",
     "src/adaptive_harness/cli.py",
+    "src/adaptive_harness/v05_cli.py",
     "src/adaptive_harness/channels/",
     "src/adaptive_harness/providers/",
     "src/adaptive_harness/runtime/policy.py",
     "src/adaptive_harness/runtime/trace_store.py",
     "src/adaptive_harness/runtime/tool_registry.py",
     "src/adaptive_harness/tools/builtin.py",
+    "src/adaptive_harness/tools/evidence_tools.py",
     "src/adaptive_harness/tools/mcp_http.py",
+    "src/adaptive_harness/orchestration/verification.py",
+    "src/adaptive_harness/orchestration/confidence.py",
+    "src/adaptive_harness/orchestration/compute_market.py",
+    "src/adaptive_harness/orchestration/policy_arena.py",
+    "src/adaptive_harness/orchestration/benchmark.py",
     "src/adaptive_harness/improvement/governance.py",
     "src/adaptive_harness/improvement/patch_security.py",
     "src/adaptive_harness/improvement/evaluator.py",

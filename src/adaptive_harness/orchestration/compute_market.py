@@ -3,8 +3,10 @@ from __future__ import annotations
 import math
 import sqlite3
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
+from typing import Any
 
 from adaptive_harness.config import ComputeEconomyConfig, HarnessConfig
 from adaptive_harness.orchestration.contracts import WorkItem
@@ -20,15 +22,18 @@ class ComputeAction(str, Enum):
 
 @dataclass(frozen=True)
 class StrategyStats:
-    samples: int
-    successes: int
+    samples: float
+    successes: float
     avg_cost_usd: float
     avg_quality_gain: float
+    evidence_mass: float = 0.0
 
     @property
     def success_rate(self) -> float:
-        # Conservative Beta(2,2) prior.
-        return (self.successes + 2.0) / (self.samples + 4.0)
+        denominator = self.evidence_mass if self.evidence_mass > 0 else self.samples
+        numerator = self.successes
+        # Conservative Beta(2,2) posterior mean.
+        return (numerator + 2.0) / (denominator + 4.0)
 
 
 @dataclass(frozen=True)
@@ -39,14 +44,22 @@ class ComputeBid:
     estimated_cost_usd: float
     utility: float
     reason: str
+    policy_id: str = "balanced-v1"
 
 
 class ComputeEconomyStore:
-    """Persistent local outcome ledger for compute strategies."""
+    """Persistent local outcome ledger for compute strategies.
 
-    def __init__(self, path: str | Path) -> None:
+    v0.5 keeps the v0.4 aggregate for compatibility and adds a decayed evidence-weighted table.
+    Weak/model-only outcomes therefore have much less influence than deterministic or otherwise
+    strongly evidenced outcomes. Geometric time decay lets the router adapt when provider quality
+    or pricing changes rather than treating old history as permanent truth.
+    """
+
+    def __init__(self, path: str | Path, *, evidence_half_life_days: float = 45.0) -> None:
         self.path = str(path)
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+        self.evidence_half_life_days = max(1.0, float(evidence_half_life_days))
         self.db = sqlite3.connect(self.path)
         self.db.execute(
             """
@@ -63,34 +76,121 @@ class ComputeEconomyStore:
             )
             """
         )
+        self.db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS strategy_evidence_stats (
+              action TEXT NOT NULL,
+              profile TEXT NOT NULL,
+              difficulty_bucket INTEGER NOT NULL,
+              critical INTEGER NOT NULL,
+              effective_samples REAL NOT NULL DEFAULT 0,
+              evidence_mass REAL NOT NULL DEFAULT 0,
+              success_mass REAL NOT NULL DEFAULT 0,
+              total_cost_usd REAL NOT NULL DEFAULT 0,
+              total_verified_gain REAL NOT NULL DEFAULT 0,
+              updated_at TEXT NOT NULL,
+              PRIMARY KEY(action, profile, difficulty_bucket, critical)
+            )
+            """
+        )
+        self.db.execute(
+            """
+            CREATE TABLE IF NOT EXISTS compute_decisions (
+              id INTEGER PRIMARY KEY AUTOINCREMENT,
+              policy_id TEXT NOT NULL,
+              action TEXT NOT NULL,
+              profile TEXT NOT NULL,
+              difficulty_bucket INTEGER NOT NULL,
+              critical INTEGER NOT NULL,
+              current_confidence REAL NOT NULL,
+              remaining_budget_usd REAL,
+              expected_success REAL NOT NULL,
+              expected_gain REAL NOT NULL,
+              estimated_cost_usd REAL NOT NULL,
+              utility REAL NOT NULL,
+              created_at TEXT NOT NULL
+            )
+            """
+        )
         self.db.commit()
 
     @staticmethod
     def bucket(difficulty: float) -> int:
         return min(5, max(0, int(difficulty * 6)))
 
+    @staticmethod
+    def _now() -> datetime:
+        return datetime.now(timezone.utc)
+
+    def _decay(self, updated_at: str) -> float:
+        try:
+            then = datetime.fromisoformat(updated_at)
+            if then.tzinfo is None:
+                then = then.replace(tzinfo=timezone.utc)
+            elapsed_seconds = max(0.0, (self._now() - then).total_seconds())
+        except Exception:
+            return 1.0
+        # Sub-minute decay is economically meaningless at a day-scale half-life and only
+        # introduces floating-point drift into immediately-read evidence aggregates.
+        if elapsed_seconds < 60.0:
+            return 1.0
+        elapsed_days = elapsed_seconds / 86400.0
+        return 0.5 ** (elapsed_days / self.evidence_half_life_days)
+
+    def _key(self, action: ComputeAction, task: WorkItem) -> tuple[Any, ...]:
+        return (
+            action.value,
+            task.profile or "generic",
+            self.bucket(task.difficulty),
+            int(task.critical),
+        )
+
     def get(self, action: ComputeAction, task: WorkItem) -> StrategyStats | None:
+        key = self._key(action, task)
+        row = self.db.execute(
+            """
+            SELECT effective_samples, evidence_mass, success_mass, total_cost_usd,
+                   total_verified_gain, updated_at
+            FROM strategy_evidence_stats
+            WHERE action=? AND profile=? AND difficulty_bucket=? AND critical=?
+            """,
+            key,
+        ).fetchone()
+        if row:
+            decay = self._decay(str(row[5]))
+            samples = float(row[0]) * decay
+            evidence_mass = float(row[1]) * decay
+            success_mass = float(row[2]) * decay
+            total_cost = float(row[3]) * decay
+            verified_gain = float(row[4]) * decay
+            return StrategyStats(
+                samples=samples,
+                successes=success_mass,
+                avg_cost_usd=total_cost / samples if samples > 1e-9 else 0.0,
+                avg_quality_gain=(
+                    verified_gain / evidence_mass if evidence_mass > 1e-9 else 0.0
+                ),
+                evidence_mass=evidence_mass,
+            )
+
+        # Backward-compatible v0.4 history remains useful until v0.5 evidence accumulates.
         row = self.db.execute(
             """
             SELECT samples, successes, total_cost_usd, total_quality_gain
             FROM strategy_stats
             WHERE action=? AND profile=? AND difficulty_bucket=? AND critical=?
             """,
-            (
-                action.value,
-                task.profile or "generic",
-                self.bucket(task.difficulty),
-                int(task.critical),
-            ),
+            key,
         ).fetchone()
         if not row:
             return None
         samples = int(row[0])
         return StrategyStats(
-            samples=samples,
-            successes=int(row[1]),
+            samples=float(samples),
+            successes=float(row[1]),
             avg_cost_usd=float(row[2]) / samples if samples else 0.0,
             avg_quality_gain=float(row[3]) / samples if samples else 0.0,
+            evidence_mass=float(samples),
         )
 
     def record(
@@ -101,7 +201,18 @@ class ComputeEconomyStore:
         succeeded: bool,
         cost_usd: float,
         quality_gain: float,
+        evidence_strength: float = 1.0,
+        outcome_score: float | None = None,
     ) -> None:
+        cost = max(0.0, float(cost_usd))
+        gain = max(0.0, min(1.0, float(quality_gain)))
+        evidence = max(0.0, min(1.0, float(evidence_strength)))
+        if outcome_score is not None:
+            outcome = max(0.0, min(1.0, float(outcome_score)))
+        else:
+            outcome = 1.0 if succeeded else 0.0
+
+        key = self._key(action, task)
         self.db.execute(
             """
             INSERT INTO strategy_stats(
@@ -114,26 +225,92 @@ class ComputeEconomyStore:
               total_cost_usd=total_cost_usd+excluded.total_cost_usd,
               total_quality_gain=total_quality_gain+excluded.total_quality_gain
             """,
+            (*key, int(succeeded), cost, gain),
+        )
+
+        existing = self.db.execute(
+            """
+            SELECT effective_samples, evidence_mass, success_mass, total_cost_usd,
+                   total_verified_gain, updated_at
+            FROM strategy_evidence_stats
+            WHERE action=? AND profile=? AND difficulty_bucket=? AND critical=?
+            """,
+            key,
+        ).fetchone()
+        now = self._now().isoformat()
+        if existing:
+            decay = self._decay(str(existing[5]))
+            samples = float(existing[0]) * decay + 1.0
+            evidence_mass = float(existing[1]) * decay + evidence
+            success_mass = float(existing[2]) * decay + outcome * evidence
+            total_cost = float(existing[3]) * decay + cost
+            verified_gain = float(existing[4]) * decay + gain * evidence
+            self.db.execute(
+                """
+                UPDATE strategy_evidence_stats SET
+                  effective_samples=?, evidence_mass=?, success_mass=?, total_cost_usd=?,
+                  total_verified_gain=?, updated_at=?
+                WHERE action=? AND profile=? AND difficulty_bucket=? AND critical=?
+                """,
+                (
+                    samples,
+                    evidence_mass,
+                    success_mass,
+                    total_cost,
+                    verified_gain,
+                    now,
+                    *key,
+                ),
+            )
+        else:
+            self.db.execute(
+                """
+                INSERT INTO strategy_evidence_stats(
+                  action, profile, difficulty_bucket, critical, effective_samples,
+                  evidence_mass, success_mass, total_cost_usd, total_verified_gain, updated_at
+                ) VALUES(?,?,?,?,1,?,?,?,?,?)
+                """,
+                (*key, evidence, outcome * evidence, cost, gain * evidence, now),
+            )
+        self.db.commit()
+
+    def record_decision(
+        self,
+        *,
+        policy_id: str,
+        bid: ComputeBid,
+        task: WorkItem,
+        current_confidence: float,
+        remaining_budget_usd: float | None,
+    ) -> None:
+        self.db.execute(
+            """
+            INSERT INTO compute_decisions(
+              policy_id, action, profile, difficulty_bucket, critical, current_confidence,
+              remaining_budget_usd, expected_success, expected_gain, estimated_cost_usd,
+              utility, created_at
+            ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
+            """,
             (
-                action.value,
+                policy_id,
+                bid.action.value,
                 task.profile or "generic",
                 self.bucket(task.difficulty),
                 int(task.critical),
-                int(succeeded),
-                max(0.0, float(cost_usd)),
-                max(0.0, min(1.0, float(quality_gain))),
+                max(0.0, min(1.0, current_confidence)),
+                remaining_budget_usd,
+                bid.expected_success,
+                bid.expected_gain,
+                bid.estimated_cost_usd,
+                bid.utility,
+                self._now().isoformat(),
             ),
         )
         self.db.commit()
 
 
 class ComputeMarket:
-    """Choose the smallest useful compute coalition under uncertainty and budget.
-
-    This is deliberately an online contextual bandit-style controller, not an RL policy.
-    It starts from transparent priors, learns per task-family/difficulty bucket, and
-    exposes every score for auditability.
-    """
+    """Choose the smallest useful compute coalition under uncertainty and budget."""
 
     _PRIORS = {
         ComputeAction.CHEAP_SINGLE: 0.70,
@@ -152,6 +329,12 @@ class ComputeMarket:
             config.team.economy if config.team is not None else ComputeEconomyConfig()
         )
         self.store = store
+
+    @staticmethod
+    def _p(policy: dict[str, float] | None, key: str, default: float) -> float:
+        if not policy:
+            return default
+        return float(policy.get(key, default))
 
     def _cold_cost(self, action: ComputeAction) -> float:
         cheap = self.economy.cold_start_cheap_call_usd
@@ -200,19 +383,20 @@ class ComputeMarket:
         *,
         current_confidence: float = 0.0,
         remaining_budget_usd: float | None = None,
+        policy: dict[str, float] | None = None,
+        policy_id: str = "balanced-v1",
     ) -> ComputeBid:
         stats = self._stats(action, task)
         prior = self._PRIORS[action]
-        samples = stats.samples if stats else 0
-        expected_success = (
-            stats.success_rate
-            if stats is not None and stats.samples >= self.economy.min_strategy_samples
-            else prior
+        evidence_samples = stats.evidence_mass if stats else 0.0
+        enough_evidence = (
+            stats is not None
+            and evidence_samples >= self.economy.min_strategy_evidence_mass
         )
-        if stats is not None and stats.samples >= self.economy.min_strategy_samples:
-            empirical_gain = max(0.0, stats.avg_quality_gain)
-        else:
-            empirical_gain = expected_success
+        expected_success = stats.success_rate if enough_evidence else prior
+        empirical_gain = (
+            max(0.0, stats.avg_quality_gain) if enough_evidence else expected_success
+        )
 
         uncertainty = max(0.0, 1.0 - current_confidence)
         diversity = {
@@ -230,20 +414,25 @@ class ComputeMarket:
         )
         primary_ref = max(self.economy.cold_start_primary_call_usd, 1e-6)
         relative_cost = estimated_cost / primary_ref
-        efficiency = expected_gain / (1.0 + self.economy.cost_weight * relative_cost)
+        cost_weight = self.economy.cost_weight * self._p(
+            policy, "cost_weight_multiplier", 1.0
+        )
+        efficiency = expected_gain / (1.0 + cost_weight * relative_cost)
 
         target = (
             self.economy.critical_success_target
             if task.critical
             else self.economy.normal_success_target
         )
+        target += self._p(policy, "success_target_delta", 0.0)
+        target = max(0.0, min(0.995, target))
         reliability_penalty = max(0.0, target - expected_success)
         if task.critical:
             reliability_penalty *= self.economy.critical_reliability_penalty
 
         exploration = 0.0
         if self.economy.exploration_rate > 0:
-            exploration = self.economy.exploration_rate / math.sqrt(samples + 1.0)
+            exploration = self.economy.exploration_rate / math.sqrt(evidence_samples + 1.0)
 
         budget_penalty = 0.0
         if remaining_budget_usd is not None:
@@ -259,8 +448,8 @@ class ComputeMarket:
         utility = efficiency + exploration - reliability_penalty - budget_penalty
         reason = (
             f"p={expected_success:.3f} gain={expected_gain:.3f} "
-            f"est_cost=${estimated_cost:.6f} samples={samples} "
-            f"utility={utility:.3f}"
+            f"est_cost=${estimated_cost:.6f} evidence={evidence_samples:.2f} "
+            f"policy={policy_id} utility={utility:.3f}"
         )
         return ComputeBid(
             action=action,
@@ -269,6 +458,7 @@ class ComputeMarket:
             estimated_cost_usd=estimated_cost,
             utility=utility,
             reason=reason,
+            policy_id=policy_id,
         )
 
     def choose(
@@ -277,6 +467,9 @@ class ComputeMarket:
         *,
         current_confidence: float = 0.0,
         remaining_budget_usd: float | None = None,
+        policy: dict[str, float] | None = None,
+        policy_id: str = "balanced-v1",
+        record_decision: bool = False,
     ) -> ComputeBid:
         actions = self._eligible(task)
         bids = [
@@ -285,14 +478,45 @@ class ComputeMarket:
                 task,
                 current_confidence=current_confidence,
                 remaining_budget_usd=remaining_budget_usd,
+                policy=policy,
+                policy_id=policy_id,
             )
             for action in actions
         ]
+        # Budget is a hard constraint, not merely a utility penalty. If no eligible
+        # coalition can fit, stop rather than letting criticality or exploration overspend.
+        if remaining_budget_usd is not None:
+            affordable = [
+                bid for bid in bids
+                if bid.estimated_cost_usd <= max(0.0, remaining_budget_usd)
+            ]
+            if not affordable:
+                best = ComputeBid(
+                    action=ComputeAction.STOP,
+                    expected_success=current_confidence,
+                    expected_gain=0.0,
+                    estimated_cost_usd=0.0,
+                    utility=0.0,
+                    reason="hard remaining budget cannot fund any eligible compute action",
+                    policy_id=policy_id,
+                )
+                if record_decision and self.store is not None:
+                    self.store.record_decision(
+                        policy_id=policy_id,
+                        bid=best,
+                        task=task,
+                        current_confidence=current_confidence,
+                        remaining_budget_usd=remaining_budget_usd,
+                    )
+                return best
+            bids = affordable
+
         best = max(bids, key=lambda bid: bid.utility)
 
         has_learned_evidence = any(
             (self._stats(action, task) is not None)
-            and self._stats(action, task).samples >= self.economy.min_strategy_samples
+            and self._stats(action, task).evidence_mass
+            >= self.economy.min_strategy_evidence_mass
             for action in actions
         )
         if not has_learned_evidence:
@@ -313,18 +537,30 @@ class ComputeMarket:
                 if cheap is not None and cheap.utility > -9:
                     best = cheap
 
+        min_gain = self.economy.min_expected_gain * self._p(
+            policy, "min_expected_gain_multiplier", 1.0
+        )
         if (
             not task.critical
-            and best.expected_gain < self.economy.min_expected_gain
+            and best.expected_gain < min_gain
             and current_confidence >= self.economy.stop_confidence_floor
         ):
-            return ComputeBid(
+            best = ComputeBid(
                 action=ComputeAction.STOP,
                 expected_success=current_confidence,
                 expected_gain=0.0,
                 estimated_cost_usd=0.0,
                 utility=0.0,
-                reason="marginal expected quality gain below configured floor",
+                reason="marginal evidence-weighted quality gain below configured floor",
+                policy_id=policy_id,
+            )
+        if record_decision and self.store is not None:
+            self.store.record_decision(
+                policy_id=policy_id,
+                bid=best,
+                task=task,
+                current_confidence=current_confidence,
+                remaining_budget_usd=remaining_budget_usd,
             )
         return best
 
@@ -336,6 +572,8 @@ class ComputeMarket:
         succeeded: bool,
         cost_usd: float,
         quality_gain: float,
+        evidence_strength: float = 1.0,
+        outcome_score: float | None = None,
     ) -> None:
         if self.store is None or bid.action == ComputeAction.STOP:
             return
@@ -345,4 +583,6 @@ class ComputeMarket:
             succeeded=succeeded,
             cost_usd=cost_usd,
             quality_gain=quality_gain,
+            evidence_strength=evidence_strength,
+            outcome_score=outcome_score,
         )

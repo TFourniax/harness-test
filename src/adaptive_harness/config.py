@@ -18,11 +18,13 @@ class ModelRole(BaseModel):
 
 
 class ComputeEconomyConfig(BaseModel):
-    """Local adaptive-compute controller. All cost hints are cold-start priors only."""
+    """Local adaptive-compute controller. All price/quality hints are cold-start priors only."""
 
     enabled: bool = True
     db: str = ".harness/compute-economy.sqlite3"
-    min_strategy_samples: int = 4
+    min_strategy_samples: int = 4  # retained for v0.4 DB compatibility
+    min_strategy_evidence_mass: float = 2.0
+    evidence_half_life_days: float = 45.0
     exploration_rate: float = 0.06
 
     # Transparent cold-start priors. Real provider-reported costs replace these per bucket.
@@ -44,11 +46,27 @@ class ComputeEconomyConfig(BaseModel):
     cheap_pair_diversity_multiplier: float = 1.10
     mixed_pair_diversity_multiplier: float = 1.16
 
+    # v0.5 evidence-grounded stopping/learning.
+    confidence_db: str = ".harness/confidence-calibration.sqlite3"
+    confidence_min_empirical_samples: int = 12
+    direct_cache_min_evidence_strength: float = 0.72
+
+    # Multi-space cache remains fully local by default.
     multi_space_cache_enabled: bool = True
     cache_calibration_min_samples: int = 8
     cache_precision_target: float = 0.995
     cache_entity_overlap_direct: float = 0.90
     cache_procedure_floor_direct: float = 0.90
+
+    # Champion/challenger arena. It may recommend a policy but cannot promote it by itself.
+    policy_arena_enabled: bool = True
+    policy_arena_db: str = ".harness/compute-policies.sqlite3"
+    policy_min_matched_trials: int = 12
+    policy_evidence_floor: float = 0.60
+    policy_quality_regression_tolerance: float = 0.01
+    policy_quality_gain_target: float = 0.02
+    policy_cost_reduction_target: float = 0.10
+    policy_cost_tolerance: float = 0.05
 
 
 class TeamConfig(BaseModel):

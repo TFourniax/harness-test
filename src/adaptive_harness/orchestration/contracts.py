@@ -12,6 +12,42 @@ class Freshness(str, Enum):
     VOLATILE = "volatile"
 
 
+class VerificationVerdict(str, Enum):
+    VERIFIED = "verified"
+    SUPPORTED = "supported"
+    UNVERIFIED = "unverified"
+    REFUTED = "refuted"
+
+
+class VerificationCertificate(BaseModel):
+    """Evidence certificate attached to one bounded worker result.
+
+    A certificate is not a capability token and never grants permissions. ``evidence_strength``
+    describes how much the compute learner may trust the outcome signal; it does not mean the
+    entire natural-language answer is mathematically proven.
+    """
+
+    verdict: VerificationVerdict = VerificationVerdict.UNVERIFIED
+    evidence_strength: float = Field(default=0.0, ge=0.0, le=1.0)
+    score: float = Field(default=0.0, ge=0.0, le=1.0)
+    deterministic: bool = False
+    scope_coverage: float = Field(default=0.0, ge=0.0, le=1.0)
+    independent_sources: int = 0
+    checks: list[str] = Field(default_factory=list)
+    evidence_refs: list[str] = Field(default_factory=list)
+    reasons: list[str] = Field(default_factory=list)
+
+    @property
+    def learning_success(self) -> float:
+        if self.verdict == VerificationVerdict.VERIFIED:
+            return 1.0
+        if self.verdict == VerificationVerdict.REFUTED:
+            return 0.0
+        if self.verdict == VerificationVerdict.SUPPORTED:
+            return min(0.8, max(0.0, self.score))
+        return 0.5
+
+
 class WorkItem(BaseModel):
     id: str
     task: str
@@ -80,7 +116,9 @@ class ContextCapsule(BaseModel):
             "You are a bounded specialist worker inside a larger orchestrated task.\n"
             "Solve only the assigned subtask. Do not broaden scope. Return a compact result that "
             "states the conclusion, evidence/observations used, uncertainty, and anything the parent "
-            "orchestrator should verify.\n\n"
+            "orchestrator should verify. Prefer verify_workspace_command when a deterministic test, "
+            "lint, build, typecheck, or compilation command is a genuine success postcondition; use "
+            "source_fetch for source-grounded web evidence when available.\n\n"
             f"ROOT GOAL:\n{self.root_goal}\n\n"
             f"ASSIGNED SUBTASK:\n{self.subtask}\n\n"
             "SUCCESS CRITERIA:\n- "
@@ -102,11 +140,20 @@ class AgentReport(BaseModel):
     cache_status: Literal["miss", "exact", "semantic_reference"] = "miss"
     evidence_refs: list[str] = Field(default_factory=list)
     cache_key: str | None = None
+    verification: VerificationCertificate | None = None
+    attempt_count: int = 1
 
     def compact(self, max_chars: int = 5000) -> str:
+        verify = "none"
+        if self.verification is not None:
+            verify = (
+                f"{self.verification.verdict.value}:"
+                f"{self.verification.evidence_strength:.2f}"
+            )
         return (
             f"TASK {self.task_id} status={self.status} role={self.role} "
-            f"confidence={self.confidence:.2f} cache={self.cache_status}\n"
+            f"confidence={self.confidence:.2f} cache={self.cache_status} "
+            f"verification={verify} attempts={self.attempt_count}\n"
             + self.answer[:max_chars]
         )
 
