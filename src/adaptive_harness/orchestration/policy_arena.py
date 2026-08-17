@@ -62,12 +62,18 @@ class PolicyArenaStore:
     Counterfactual/shadow observations may be stored for diagnosis, but only real ``benchmark``
     trials are eligible for promotion recommendations. The arena never modifies capability, agent,
     round, or dollar ceilings.
+
+    The constructor accepts either explicit thresholds (the v0.5 API) or a compute-economy config
+    object (the v0.6 Policy Lab API). Explicit values remain the public defaults; when ``config`` is
+    supplied its policy fields become the source of truth. This keeps old callers compatible while
+    avoiding threshold drift between the arena and the lab.
     """
 
     def __init__(
         self,
         path: str | Path,
         *,
+        config: Any | None = None,
         min_matched_trials: int = 12,
         quality_regression_tolerance: float = 0.01,
         quality_gain_target: float = 0.02,
@@ -75,15 +81,39 @@ class PolicyArenaStore:
         cost_tolerance: float = 0.05,
         evidence_floor: float = 0.60,
     ) -> None:
+        if config is not None:
+            min_matched_trials = int(
+                getattr(config, "policy_min_matched_trials", min_matched_trials)
+            )
+            quality_regression_tolerance = float(
+                getattr(
+                    config,
+                    "policy_quality_regression_tolerance",
+                    quality_regression_tolerance,
+                )
+            )
+            quality_gain_target = float(
+                getattr(config, "policy_quality_gain_target", quality_gain_target)
+            )
+            cost_reduction_target = float(
+                getattr(config, "policy_cost_reduction_target", cost_reduction_target)
+            )
+            cost_tolerance = float(
+                getattr(config, "policy_cost_tolerance", cost_tolerance)
+            )
+            evidence_floor = float(
+                getattr(config, "policy_evidence_floor", evidence_floor)
+            )
+
         self.path = str(path)
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         self.db = sqlite3.connect(self.path)
-        self.min_matched_trials = min_matched_trials
-        self.quality_regression_tolerance = quality_regression_tolerance
-        self.quality_gain_target = quality_gain_target
-        self.cost_reduction_target = cost_reduction_target
-        self.cost_tolerance = cost_tolerance
-        self.evidence_floor = evidence_floor
+        self.min_matched_trials = max(1, int(min_matched_trials))
+        self.quality_regression_tolerance = max(0.0, float(quality_regression_tolerance))
+        self.quality_gain_target = max(0.0, float(quality_gain_target))
+        self.cost_reduction_target = max(0.0, float(cost_reduction_target))
+        self.cost_tolerance = max(0.0, float(cost_tolerance))
+        self.evidence_floor = max(0.0, min(1.0, float(evidence_floor)))
         self.db.execute(
             """
             CREATE TABLE IF NOT EXISTS compute_policies (
@@ -155,7 +185,6 @@ class PolicyArenaStore:
                 """,
                 (policy_id, name, json.dumps(params, sort_keys=True), status, _utcnow()),
             )
-        # Never allow bootstrapping to create multiple champions in an existing database.
         champion_count = self.db.execute(
             "SELECT COUNT(*) FROM compute_policies WHERE status='champion'"
         ).fetchone()[0]
