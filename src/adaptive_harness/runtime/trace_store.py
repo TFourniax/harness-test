@@ -4,7 +4,7 @@ import json
 import sqlite3
 from pathlib import Path
 
-from adaptive_harness.contracts import ApprovalRequest, TraceEvent
+from adaptive_harness.contracts import ApprovalRequest, Observation, TraceEvent
 
 
 class TraceStore:
@@ -148,6 +148,33 @@ class TraceStore:
             {"kind": kind, "created_at": created_at, "payload": json.loads(payload)}
             for kind, created_at, payload in rows
         ]
+
+    def find_observations(self, call_ids: list[str]) -> list[Observation]:
+        """Resolve prior tool observations by concrete call id across runs.
+
+        Only trace events emitted after actual tool execution are considered, so a model cannot
+        manufacture a call id and use it as mission evidence.
+        """
+        wanted = {str(value) for value in call_ids if str(value)}
+        if not wanted:
+            return []
+        found: dict[str, Observation] = {}
+        with sqlite3.connect(self.path) as db:
+            rows = db.execute(
+                "SELECT payload FROM events "
+                "WHERE kind IN ('tool_observation','approved_tool_observation') "
+                "ORDER BY created_at DESC"
+            ).fetchall()
+        for (raw,) in rows:
+            try:
+                obs = Observation.model_validate(json.loads(raw))
+            except Exception:
+                continue
+            if obs.call_id in wanted and obs.call_id not in found:
+                found[obs.call_id] = obs
+                if len(found) == len(wanted):
+                    break
+        return [found[call_id] for call_id in call_ids if call_id in found]
 
     def get_channel_cursor(self, channel: str) -> int | None:
         with sqlite3.connect(self.path) as db:

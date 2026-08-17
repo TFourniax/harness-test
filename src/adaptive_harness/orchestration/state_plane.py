@@ -89,9 +89,16 @@ class StateAuditIssue(BaseModel):
 class TaskStateStore:
     """SQLite canonical state plane with optimistic revisions and append-only events."""
 
-    def __init__(self, path: str | Path, *, done_evidence_strength: float = 0.60) -> None:
+    def __init__(
+        self,
+        path: str | Path,
+        *,
+        done_evidence_strength: float = 0.60,
+        max_tasks: int = 256,
+    ) -> None:
         self.path = str(path)
         self.done_evidence_strength = float(done_evidence_strength)
+        self.max_tasks = max(1, int(max_tasks))
         Path(self.path).parent.mkdir(parents=True, exist_ok=True)
         with self._connect() as db:
             db.executescript(
@@ -214,6 +221,8 @@ class TaskStateStore:
             db.execute("BEGIN IMMEDIATE")
             current = self._check_revision(db, mission_id, expected_revision)
             known = {str(row[0]) for row in db.execute("SELECT task_id FROM mission_tasks WHERE mission_id=?", (mission_id,)).fetchall()}
+            if len(known) >= self.max_tasks:
+                raise ValueError(f"mission task limit reached: {self.max_tasks}")
             unknown = set(deps) - known
             if unknown:
                 raise ValueError(f"unknown task dependencies: {sorted(unknown)}")

@@ -226,10 +226,16 @@ class PolicyArenaStore:
         quality: float,
         cost_usd: float,
         evidence_strength: float,
-        passed: bool,
+        passed: bool | None = None,
+        success: bool | None = None,
         source: Literal["benchmark", "live", "shadow", "matched_action"] = "benchmark",
         latency_ms: float = 0.0,
     ) -> None:
+        if passed is None and success is None:
+            raise TypeError("record_trial requires either passed= or success=")
+        if passed is not None and success is not None and bool(passed) != bool(success):
+            raise ValueError("passed and success disagree for the same policy trial")
+        canonical_passed = bool(success) if passed is None else bool(passed)
         self.db.execute(
             """
             INSERT INTO policy_trials(
@@ -244,7 +250,7 @@ class PolicyArenaStore:
                 max(0.0, min(1.0, float(quality))),
                 max(0.0, float(cost_usd)),
                 max(0.0, min(1.0, float(evidence_strength))),
-                int(passed),
+                int(canonical_passed),
                 max(0.0, float(latency_ms)),
                 _utcnow(),
             ),

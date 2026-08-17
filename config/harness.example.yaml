@@ -125,6 +125,17 @@ team:
     policy_cost_reduction_target: 0.10
     policy_cost_tolerance: 0.05
 
+
+# Durable Mission Plane (v0.6): canonical task/fact state lives outside model context.
+# Workers can read budgeted slices; only the governed parent receives write tools.
+long_horizon:
+  enabled: true
+  state_db: .harness/task-state.sqlite3
+  context_budget_tokens: 3000
+  task_done_evidence_strength: 0.60
+  fact_evidence_strength: 0.25
+  max_tasks_per_mission: 256
+
 # Optional private Telegram control channel. Secrets stay in environment variables.
 telegram:
   enabled: false

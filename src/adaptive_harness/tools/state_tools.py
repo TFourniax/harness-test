@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from typing import Any
 
 from adaptive_harness.contracts import RiskLevel, RunStatus, ToolSpec
@@ -13,7 +14,12 @@ from adaptive_harness.runtime.tool_registry import ToolRegistry
 from adaptive_harness.runtime.trace_store import TraceStore
 
 
-def _resolve_evidence(traces: TraceStore, call_ids: list[str]):
+def _resolve_evidence(
+    traces: TraceStore,
+    call_ids: list[str],
+    *,
+    not_before: str | None = None,
+):
     ids = list(dict.fromkeys(str(value) for value in call_ids if str(value)))
     observations = traces.find_observations(ids)
     found = {obs.call_id for obs in observations}
@@ -22,6 +28,11 @@ def _resolve_evidence(traces: TraceStore, call_ids: list[str]):
         raise ValueError(f"unknown/non-executed evidence call ids: {missing}")
     if not observations:
         raise ValueError("at least one executed tool observation is required")
+    if not_before:
+        boundary = datetime.fromisoformat(not_before)
+        stale = [obs.call_id for obs in observations if obs.created_at < boundary]
+        if stale:
+            raise ValueError(f"evidence predates mission/task creation: {stale}")
     return observations
 
 
@@ -238,7 +249,15 @@ def register_state_tools(
     )
 
     def record_fact(args: dict[str, Any]) -> str:
-        observations = _resolve_evidence(traces, args["evidence_call_ids"])
+        snap = store.snapshot(args["mission_id"])
+        source_task = next(
+            (task for task in snap.tasks if task.id == args.get("source_task_id")),
+            None,
+        )
+        boundary = source_task.created_at if source_task else snap.created_at
+        observations = _resolve_evidence(
+            traces, args["evidence_call_ids"], not_before=boundary
+        )
         cert = _certificate(
             verifier,
             description=args["claim"],
@@ -292,7 +311,9 @@ def register_state_tools(
         task = next((item for item in snap.tasks if item.id == args["task_id"]), None)
         if task is None:
             raise KeyError(f"unknown mission task: {args['task_id']}")
-        observations = _resolve_evidence(traces, args["evidence_call_ids"])
+        observations = _resolve_evidence(
+            traces, args["evidence_call_ids"], not_before=task.created_at
+        )
         cert = _certificate(
             verifier,
             description=task.description,

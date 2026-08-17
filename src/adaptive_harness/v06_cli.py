@@ -44,6 +44,7 @@ def _state_store(cfg: HarnessConfig) -> TaskStateStore:
     return TaskStateStore(
         _resolved_path(cfg.harness_root, cfg.long_horizon.state_db),
         done_evidence_strength=cfg.long_horizon.task_done_evidence_strength,
+        max_tasks=cfg.long_horizon.max_tasks_per_mission,
     )
 
 

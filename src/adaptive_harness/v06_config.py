@@ -3,12 +3,12 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import Field
+from pydantic import BaseModel, Field
 
 from adaptive_harness.config import HarnessConfig as BaseHarnessConfig
 
 
-class LongHorizonConfig(BaseHarnessConfig.__base__):
+class LongHorizonConfig(BaseModel):
     """Durable canonical mission state kept outside model context."""
 
     enabled: bool = True

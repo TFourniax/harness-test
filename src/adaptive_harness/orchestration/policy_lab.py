@@ -68,7 +68,7 @@ class PolicyUncertaintyLab:
         with sqlite3.connect(self.db_path) as db:
             rows = db.execute(
                 """
-                SELECT task_key, AVG(quality), AVG(cost_usd), AVG(success)
+                SELECT task_key, AVG(quality), AVG(cost_usd), AVG(passed)
                 FROM policy_trials
                 WHERE policy_id=? AND source='benchmark' AND evidence_strength>=?
                 GROUP BY task_key
