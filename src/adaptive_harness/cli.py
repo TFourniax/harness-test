@@ -19,6 +19,8 @@ from adaptive_harness.improvement.evaluator import PatchEvaluator
 from adaptive_harness.improvement.governance import PromotionGate
 from adaptive_harness.improvement.skill_evolution import SkillEvolutionEngine, SkillPromotionGate
 from adaptive_harness.memory.store import MemoryStore
+from adaptive_harness.orchestration.team import TeamOrchestrator, register_team_orchestration
+from adaptive_harness.orchestration.vector_cache import SemanticWorkCache
 from adaptive_harness.providers.litellm_provider import LiteLLMProvider
 from adaptive_harness.profiles import ProfileRegistry
 from adaptive_harness.runtime.agent import AgentRuntime
@@ -37,15 +39,57 @@ def build(config_path: str):
     register_builtin_tools(tools, cfg.workspace)
     traces = TraceStore(str(_resolved_path(cfg.harness_root, cfg.trace_db)))
     memory = MemoryStore(str(_resolved_path(cfg.harness_root, cfg.memory_db)))
+    skill_registry = SkillRegistry(Path(cfg.harness_root) / "skills")
+    profile_registry = ProfileRegistry(Path(cfg.harness_root) / "profiles")
     runtime = AgentRuntime(
         config=cfg,
         provider=provider,
         tools=tools,
         traces=traces,
         memory=memory,
-        skills=SkillRegistry(Path(cfg.harness_root) / "skills"),
-        profiles=ProfileRegistry(Path(cfg.harness_root) / "profiles"),
+        skills=skill_registry,
+        profiles=profile_registry,
     )
+
+    # Team workers get the same governed runtime and memory, but a separate registry without the
+    # team tool. This prevents unbounded recursive swarms while keeping all normal policy/evidence
+    # gates inside each specialist.
+    if cfg.team is not None and cfg.team.enabled:
+        child_tools = ToolRegistry()
+        register_builtin_tools(child_tools, cfg.workspace)
+        # Cognitive workers must not mutate the host checkout. They retain the disposable
+        # read-only-copy sandbox for tests/builds, but the host-write tools are absent entirely.
+        child_tools.unregister("fs_write")
+        child_tools.unregister("sandbox_command")
+        child_scopes = {
+            scope for scope in cfg.allowed_scopes
+            if scope in {"fs:read", "net:read", "exec:sandbox"}
+        }
+        child_cfg = cfg.model_copy(update={"allowed_scopes": child_scopes})
+        child_runtime = AgentRuntime(
+            config=child_cfg,
+            provider=provider,
+            tools=child_tools,
+            traces=traces,
+            memory=memory,
+            skills=skill_registry,
+            profiles=profile_registry,
+        )
+        cache = None
+        if cfg.team.semantic_cache_enabled:
+            cache = SemanticWorkCache(
+                _resolved_path(cfg.harness_root, cfg.team.semantic_cache_db)
+            )
+        register_team_orchestration(
+            tools,
+            TeamOrchestrator(
+                config=cfg,
+                provider=provider,
+                traces=traces,
+                child_runner=child_runtime.run,
+                cache=cache,
+            ),
+        )
     return cfg, provider, traces, runtime
 
 

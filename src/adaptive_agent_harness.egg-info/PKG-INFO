@@ -1,0 +1,23 @@
+Metadata-Version: 2.4
+Name: adaptive-agent-harness
+Version: 0.3.0
+Summary: Model-agnostic, evidence-gated, self-improving agent harness with human-governed evolution.
+Requires-Python: >=3.11
+Requires-Dist: pydantic>=2.8
+Requires-Dist: pydantic-settings>=2.4
+Requires-Dist: typer>=0.12
+Requires-Dist: rich>=13.7
+Requires-Dist: httpx>=0.27
+Requires-Dist: PyYAML>=6.0
+Requires-Dist: jsonschema>=4.23
+Requires-Dist: litellm>=1.90.0
+Provides-Extra: api
+Requires-Dist: fastapi>=0.115; extra == "api"
+Requires-Dist: uvicorn>=0.30; extra == "api"
+Provides-Extra: telemetry
+Requires-Dist: opentelemetry-api>=1.27; extra == "telemetry"
+Requires-Dist: opentelemetry-sdk>=1.27; extra == "telemetry"
+Provides-Extra: dev
+Requires-Dist: pytest>=8.3; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.24; extra == "dev"
+Requires-Dist: ruff>=0.6; extra == "dev"

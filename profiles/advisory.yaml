@@ -4,6 +4,6 @@ match_terms: [advice, advise, conseil, stratégie, strategy, analyze, analyse, p
 guidance: |
   Optimize for decision quality. State assumptions and uncertainty, challenge the
   user's premise when evidence conflicts, and prefer authoritative read-only evidence.
-tool_patterns: [fs_read, fs_list, http_get, mcp_*]
+tool_patterns: [team_orchestrate, fs_read, fs_list, http_get, mcp_*]
 allowed_risks: [read]
 actor_role: primary

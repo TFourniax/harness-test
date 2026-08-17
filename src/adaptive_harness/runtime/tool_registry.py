@@ -6,9 +6,9 @@ import jsonschema
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from adaptive_harness.contracts import Observation, ToolCall, ToolSpec, TrustLevel
+from adaptive_harness.contracts import Observation, ToolCall, ToolExecutionResult, ToolSpec, TrustLevel
 
-ToolFn = Callable[[dict[str, Any]], Awaitable[str] | str]
+ToolFn = Callable[[dict[str, Any]], Awaitable[str | ToolExecutionResult] | str | ToolExecutionResult]
 
 
 class ToolRegistry:
@@ -21,6 +21,10 @@ class ToolRegistry:
             raise ValueError(f"duplicate tool: {spec.name}")
         self._specs[spec.name] = spec
         self._fns[spec.name] = fn
+
+    def unregister(self, name: str) -> None:
+        self._specs.pop(name, None)
+        self._fns.pop(name, None)
 
     def specs(self) -> list[ToolSpec]:
         return list(self._specs.values())
@@ -39,17 +43,27 @@ class ToolRegistry:
             value = fn(call.arguments)
             if asyncio.iscoroutine(value):
                 value = await value
+            default_trust = (
+                TrustLevel.UNTRUSTED_EXTERNAL
+                if spec.source in {"web", "mcp", "remote", "delegate"} or spec.source.startswith("mcp:")
+                else TrustLevel.TOOL
+            )
+            if isinstance(value, ToolExecutionResult):
+                return Observation(
+                    call_id=call.id,
+                    tool_name=call.name,
+                    ok=True,
+                    content=value.content,
+                    metadata={"risk": spec.risk.value, "source": spec.source, **value.metadata},
+                    trust=value.trust or default_trust,
+                )
             return Observation(
                 call_id=call.id,
                 tool_name=call.name,
                 ok=True,
                 content=str(value),
                 metadata={"risk": spec.risk.value, "source": spec.source},
-                trust=(
-                    TrustLevel.UNTRUSTED_EXTERNAL
-                    if spec.source in {"web", "mcp", "remote", "delegate"} or spec.source.startswith("mcp:")
-                    else TrustLevel.TOOL
-                ),
+                trust=default_trust,
             )
         except Exception as exc:  # tool failures are observations, not runtime crashes
             return Observation(

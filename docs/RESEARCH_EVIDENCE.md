@@ -60,3 +60,34 @@ The fourth pattern is **heterogeneous verification**. The best available oracle 
 - https://openai.com/index/running-codex-safely/
 - https://modelcontextprotocol.io/specification/2026-07-28
 - https://docs.litellm.ai/docs/providers
+
+## v0.3 — cost-aware multi-agent synthesis
+
+The v0.3 team plane was added after reviewing multi-agent quality gains together with the cost/communication literature. The design deliberately does not copy any one harness.
+
+| Work | Evidence retained | Design consequence | Caveat |
+|---|---|---|---|
+| Mixture-of-Agents (2024) | Layered multi-model aggregation can substantially improve benchmark quality. | Preserve the idea of multiple independent viewpoints and a lead synthesizer. | Full previous-layer broadcast multiplies context; not used as the default topology. |
+| AgentPrune (2024) | Reports 28.1–72.8% token reduction after pruning redundant communication in evaluated MAS topologies. | Treat communication edges as a cost and send only dependency summaries. | Benchmark-specific; not a universal optimal graph proof. |
+| AgentDropout (2025) | Reports average 21.6% prompt and 18.4% completion token reductions while dynamically removing redundant agents/edges. | Agents are activated conditionally rather than permanently. | Learned dropout method is not reproduced; v0.3 uses auditable heuristics first. |
+| LLMRouter (2026) | Frames routing as sequential quality/cost optimization; learned routers beat fixed baselines in its benchmark. | Store task-family/difficulty/model outcomes and adapt cheap-vs-primary routing from traces. | Current v0.3 router is a small empirical Bayesian rule, not the paper's full framework. |
+| Dynamic Coalition Formation (2026) | Models net utility as coalition value minus agent/communication costs and reports strong synthetic results for marginal activation. | Add expected-value/difficulty utility gates and bounded follow-up rounds. | Authors explicitly note main router remains heuristic and synthetic robustness degrades under assumption violations. |
+| VectorQ (2025) | Shows one global semantic-cache threshold is inadequate; adaptive regions improve hit/error tradeoff in studied datasets. | Separate strict direct reuse from a lower semantic-reference zone. | v0.3 does not yet learn threshold regions. |
+| Krites (2026) | Uses asynchronous verification to expand curated semantic-cache coverage without changing the serving critical path. | Keep “verified/promoted” cache state distinct from ordinary dynamic entries. | v0.3 uses deterministic provenance rules rather than an asynchronous LLM cache judge. |
+| Hermes Agent docs (current) | Fresh isolated subagent contexts, parallel delegation, worktree guidance, cross-session prompt caching, and stable prefixes are practical harness patterns. | Preserve fresh bounded child contexts; keep parent prefix stable; plan isolated writable worktrees as the next code-team step. | We intentionally add DAG/value/cache governance rather than assuming every delegated task is worth spawning. |
+| OpenRouter prompt/response caching (current) | Provider prompt caches benefit from stable prefixes; OpenRouter also exposes exact response caching. | Move run-dynamic observations out of the stable system prefix and keep application cache orthogonal to provider cache. | Provider behavior/pricing can change and must be measured from actual usage metadata. |
+
+Primary references:
+
+- Mixture-of-Agents — https://arxiv.org/abs/2406.04692
+- AgentPrune — https://arxiv.org/abs/2410.02506
+- AgentDropout — https://arxiv.org/abs/2503.18891
+- LLMRouter — https://arxiv.org/abs/2608.06867
+- Dynamic Coalition Formation and Communication Pricing — https://arxiv.org/abs/2608.07532
+- VectorQ — https://arxiv.org/abs/2502.03771
+- Krites — https://arxiv.org/abs/2602.13165
+- Hermes delegation — https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/delegation.md
+- Hermes caching/configuration — https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/configuration.md
+- Hermes prompt-cache implementation — https://github.com/NousResearch/hermes-agent/blob/main/agent/prompt_caching.py
+- OpenRouter prompt caching — https://openrouter.ai/docs/guides/best-practices/prompt-caching
+- OpenRouter exact response caching — https://openrouter.ai/docs/guides/features/response-caching

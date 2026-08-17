@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adaptive-agent-harness"
-version = "0.2.0"
+version = "0.3.0"
 description = "Model-agnostic, evidence-gated, self-improving agent harness with human-governed evolution."
 requires-python = ">=3.11"
 dependencies = [

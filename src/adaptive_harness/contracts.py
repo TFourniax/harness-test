@@ -42,6 +42,7 @@ class Goal(BaseModel):
     constraints: list[str] = Field(default_factory=list)
     max_steps: int = 40
     max_cost_usd: float | None = None
+    model_role: Literal["auto", "primary", "cheap"] = "auto"
 
 
 class EvidenceRequirement(BaseModel):
@@ -76,6 +77,12 @@ class Observation(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
     trust: TrustLevel = TrustLevel.TOOL
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class ToolExecutionResult(BaseModel):
+    content: str
+    metadata: dict[str, Any] = Field(default_factory=dict)
+    trust: TrustLevel | None = None
 
 
 class ModelTurn(BaseModel):

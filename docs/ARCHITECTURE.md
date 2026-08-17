@@ -164,3 +164,24 @@ The current MCP adapter targets the 2026-07-28 stateless request model and prefi
 - RETRACE (2026), arXiv:2608.08950.
 - AgentLens (2026) on trajectory quality / lucky passes.
 - MCP Specification 2026-07-28.
+
+## v0.3 sparse hierarchical team plane
+
+Complex tasks may enter a second internal control loop through `team_orchestrate`:
+
+```text
+parent authority
+  -> complexity gate
+  -> sparse DAG planner
+  -> dependency waves of isolated specialists
+  -> compact evidence reports
+  -> lead synthesis
+  -> targeted follow-up only when material uncertainty remains
+  -> parent continues the normal governed action loop
+```
+
+The team plane is intentionally below the parent policy boundary. Child workers have a reduced registry, cannot call `team_orchestrate` recursively, and do not receive normal host-write tools. Nested provider cost is returned as tool metadata and charged to the parent run budget.
+
+The communication graph is sparse by construction rather than a full Mixture-of-Agents broadcast. This is a direct architectural response to token redundancy observed in AgentPrune and AgentDropout. The current marginal-value heuristic is intentionally simple and should be replaced only when a learned coalition selector proves better on held-out cost/quality evaluations.
+
+The cache hierarchy is likewise layered: provider prefix cache -> exact work cache -> high-threshold verified semantic reuse -> lower-threshold semantic reference. Semantic similarity never overrides provenance/freshness gates. See [Sparse Team Orchestration](TEAM_ORCHESTRATION.md).

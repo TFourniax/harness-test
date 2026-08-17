@@ -207,9 +207,11 @@ async def test_session_context_is_persisted_across_runs(tmp_path: Path):
     first = await runtime.run(Goal(text="remember alpha", session_id="s", max_steps=2))
     second = await runtime.run(Goal(text="what next?", session_id="s", max_steps=2))
     assert first.status == RunStatus.SUCCEEDED and second.status == RunStatus.SUCCEEDED
-    second_system = provider.messages_seen[1][0]["content"]
-    assert "remember alpha" in second_system
-    assert "first answer" in second_system
+    second_context = "\n".join(message["content"] for message in provider.messages_seen[1])
+    assert "remember alpha" in second_context
+    assert "first answer" in second_context
+    # Dynamic history must not mutate the cache-stable system prefix.
+    assert "remember alpha" not in provider.messages_seen[1][0]["content"]
 
 @pytest.mark.asyncio
 async def test_model_protocol_error_is_observation_not_false_success(tmp_path: Path):

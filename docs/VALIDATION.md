@@ -1,13 +1,13 @@
 # Validation Snapshot
 
-Date: 2026-08-16
+Date: 2026-08-17
 
 This file records what was actually checked in the build environment. It is intentionally narrower than a production certification.
 
 ## Passed in this build
 
-- `pytest -q`: **46 passed**.
-- `python -m compileall -q src`: passed.
+- `pytest -q`: **54 passed**.
+- `python -m compileall -q src tests`: passed.
 - CLI import and command registration: passed.
 - `adaptive-harness doctor -c config/harness.example.yaml`: harness/workspace discovered, six task profiles loaded, Git detected, runtime self-write protection detected.
 - Text-only model tool protocol: valid tool envelope and invalid-JSON/fail-retry behavior unit-tested.
@@ -32,3 +32,9 @@ Before calling a deployment production-ready, run the same harness/model combina
 ## Channel validation added in v0.2.0
 
 The Telegram/channel layer is covered by local deterministic tests for default-deny user authorization, optional chat allowlisting, private-chat defaults, callback payload size, message chunking, stable session identity, durable update cursor storage, and prevention of cross-session action approvals. No live Telegram token was used in the validation environment, so real Bot API network delivery is intentionally not claimed as tested here.
+
+## Team runtime validation added in v0.3.0
+
+Deterministic tests now cover the sparse team planner/executor/synthesizer path, parallel cheap workers, targeted second-round follow-up, the zero-token complexity gate for obviously simple work, nested team-cost accounting against the parent budget, context-scoped exact cache reuse, unverified-entry reference-only behavior, and empirical cheap/primary routing adaptation.
+
+The following are **not** claimed as validated yet: real provider-side prompt-cache hit rates, live dollar savings on OpenRouter/Replicate, semantic-cache false-reuse rate on a representative production trace corpus, quality/cost superiority over a fixed broadcast MoA, and multi-agent code writes using isolated Git worktrees. These require provider credentials and a held-out workload distribution.

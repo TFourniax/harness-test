@@ -197,6 +197,11 @@ class AgentRuntime:
 
         obs = await self._execute_guarded(run_id, spec, call)
         observations.append(obs)
+        reported_cost_usd += float(obs.metadata.get("model_cost_usd", 0.0) or 0.0)
+        budget_result = self._budget_failure(run_id, goal, reported_cost_usd, observations)
+        if budget_result:
+            self.traces.clear_checkpoint(run_id)
+            return budget_result
         self.evidence.update_from_observation(obs)
         self.traces.append(
             TraceEvent(
@@ -215,7 +220,11 @@ class AgentRuntime:
             return TaskProfile(name="generic", description="fallback")
         return self.profiles.select(goal)
 
-    def _actor_role(self, profile: TaskProfile):
+    def _actor_role(self, profile: TaskProfile, goal: Goal | None = None):
+        if goal is not None and goal.model_role == "cheap" and self.config.cheap is not None:
+            return self.config.cheap
+        if goal is not None and goal.model_role == "primary":
+            return self.config.primary
         if profile.actor_role == "cheap" and self.config.cheap is not None:
             return self.config.cheap
         return self.config.primary
@@ -318,7 +327,7 @@ class AgentRuntime:
         profile = self._profile(goal)
         active_specs = [spec for spec in self.tools.specs() if profile.allows_tool(spec)]
         active_tool_names = {spec.name for spec in active_specs}
-        actor = self._actor_role(profile)
+        actor = self._actor_role(profile, goal)
         for step in range(start_step, goal.max_steps):
             active_skills = (
                 [s.body for s in self.skills.retrieve(goal.text, limit=4)] if self.skills else []
@@ -545,6 +554,11 @@ class AgentRuntime:
 
                 obs = await self._execute_guarded(run_id, spec, call)
                 observations.append(obs)
+                reported_cost_usd += float(obs.metadata.get("model_cost_usd", 0.0) or 0.0)
+                budget_result = self._budget_failure(run_id, goal, reported_cost_usd, observations)
+                if budget_result:
+                    self.traces.clear_checkpoint(run_id)
+                    return budget_result
                 self.evidence.update_from_observation(obs)
                 self.traces.append(
                     TraceEvent(run_id=run_id, kind="tool_observation", payload=obs.model_dump())

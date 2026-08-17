@@ -66,15 +66,20 @@ The eval bank should be versioned outside the candidate’s writable workspace, 
 
 ## P5 — Organization / multi-agent scale
 
-Only after the single-agent control plane is reliable:
+v0.3 now provides the local reference for sparse DAG planning, dependency-aware parallel workers, context capsules, targeted follow-up rounds, nested model-cost accounting, semantic work caching, and empirical cheap/primary routing. Production should extend it with:
 
-- distributed worker runtime;
-- explicit child-agent budgets and capabilities;
-- task DAG with dependency-aware scheduling;
-- map/reduce evidence synthesis for broad research;
-- independent adversarial reviewers from different model families;
+- distributed leased worker runtime with cancellation and backpressure;
+- complete child budgets including model, browser, sandbox, embedding, storage and network cost;
+- isolated Git worktree/overlay per code worker, with parent merge/test arbitration;
+- learned coalition/communication-edge selection trained on actual traces;
+- multi-family independent adversarial reviewers for high-uncertainty claims;
 - workspace and tenant isolation;
-- durable organization knowledge with policy-scoped retrieval.
+- durable organization knowledge with policy-scoped hybrid retrieval;
+- a pluggable dense+sparse vector backend (Qdrant/pgvector/etc.) for cache and procedural retrieval;
+- learned semantic-cache thresholds by task family/freshness/provenance;
+- provider-native prompt-cache telemetry and automatic prefix/cache policy optimization;
+- controlled exact-response cache use only for deterministic/idempotent prompts;
+- benchmark dashboards comparing single-agent, fixed swarm, sparse team, and cached sparse-team Pareto frontiers.
 
 ## Definition of “better”
 

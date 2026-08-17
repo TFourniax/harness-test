@@ -17,6 +17,29 @@ class ModelRole(BaseModel):
     num_retries: int = 2
 
 
+class TeamConfig(BaseModel):
+    enabled: bool = True
+    max_agents: int = 6
+    max_rounds: int = 3
+    max_tasks_per_plan: int = 8
+    worker_max_steps: int = 18
+    orchestrator_role: Literal["cheap", "primary"] = "cheap"
+    synthesizer_role: Literal["cheap", "primary"] = "primary"
+    cheap_max_difficulty: float = 0.62
+    routing_stats_db: str = ".harness/routing-stats.sqlite3"
+    routing_min_samples: int = 4
+    routing_target_success: float = 0.78
+    utility_floor: float = 0.18
+    target_confidence: float = 0.86
+    max_report_chars: int = 5000
+    semantic_cache_enabled: bool = True
+    semantic_cache_db: str = ".harness/team-cache.sqlite3"
+    semantic_direct_threshold: float = 0.985
+    semantic_reference_threshold: float = 0.90
+    stable_cache_ttl_seconds: int = 604800
+    volatile_cache_ttl_seconds: int = 600
+
+
 class TelegramChannelConfig(BaseModel):
     enabled: bool = False
     token_env: str = "TELEGRAM_BOT_TOKEN"
@@ -51,6 +74,7 @@ class HarnessConfig(BaseModel):
     maintenance_scan_runs: int = 50
     maintenance_out: str = ".harness/proposals"
     telegram: TelegramChannelConfig | None = None
+    team: TeamConfig | None = None
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "HarnessConfig":

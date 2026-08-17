@@ -124,6 +124,31 @@ def register_builtin_tools(registry: ToolRegistry, workspace: str) -> None:
 
     registry.register(
         ToolSpec(
+            name="sandbox_readonly_command",
+            description=(
+                "Execute a command in an ephemeral Docker copy of the workspace. The host workspace "
+                "is mounted read-only; files may be modified only inside the disposable container. "
+                "Network is disabled. Use for worker tests, linting, builds and code inspection."
+            ),
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "command": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                    "image": {"type": "string", "default": "python:3.12-slim"},
+                    "timeout": {"type": "integer", "default": 120, "minimum": 1, "maximum": 900},
+                },
+                "required": ["command"],
+                "additionalProperties": False,
+            },
+            risk=RiskLevel.READ,
+            required_scopes={"exec:sandbox"},
+            idempotent=True,
+        ),
+        lambda a: _sandbox_readonly(root, a),
+    )
+
+    registry.register(
+        ToolSpec(
             name="sandbox_command",
             description=(
                 "Execute a command in an ephemeral Docker container with the workspace mounted read-write. "
@@ -194,6 +219,31 @@ def _validate_public_url(url: str) -> None:
         ip = ipaddress.ip_address(raw)
         if not ip.is_global:
             raise ValueError(f"non-public destination blocked: {ip}")
+
+
+
+def _sandbox_readonly(root: Path, args: dict[str, Any]) -> str:
+    command = args["command"]
+    image = args.get("image", "python:3.12-slim")
+    timeout = int(args.get("timeout", 120))
+    inspect = subprocess.run(["docker", "image", "inspect", image], text=True, capture_output=True)
+    if inspect.returncode != 0:
+        raise ValueError(f"sandbox image is not preinstalled locally: {image}")
+    # The source checkout is never writable. A disposable tmpfs copy gives tools/tests a normal
+    # writable project tree without letting any child agent mutate host state.
+    wrapper = 'cp -a /source/. /tmp/workspace && cd /tmp/workspace && exec "$@"'
+    proc = subprocess.run(
+        [
+            "docker", "run", "--rm", "--network", "none", "--cap-drop", "ALL",
+            "--read-only", "--tmpfs", "/tmp:rw,exec,nosuid,size=512m", "--cpus", "2",
+            "--memory", "2g", "--pids-limit", "256", "--security-opt", "no-new-privileges",
+            "-v", f"{root}:/source:ro", image, "sh", "-lc", wrapper, "worker", *command,
+        ],
+        text=True, capture_output=True, timeout=timeout, env={"PATH": os.environ.get("PATH", "")},
+    )
+    return json.dumps(
+        {"returncode": proc.returncode, "stdout": proc.stdout[-50_000:], "stderr": proc.stderr[-50_000:]}
+    )
 
 
 def _sandbox(root: Path, args: dict[str, Any], protected: tuple[str, ...] = ()) -> str:

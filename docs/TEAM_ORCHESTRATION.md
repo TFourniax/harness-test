@@ -1,0 +1,183 @@
+# Sparse Team Orchestration
+
+## Goal
+
+The v0.3 team runtime is designed for a specific regime: tasks that are too broad, uncertain, or heterogeneous for one linear agent loop, while inference cost and context growth remain first-class constraints.
+
+It is **not** a permanent swarm. The parent agent remains the authority. `team_orchestrate` is an internal deliberation tool that is invoked only when decomposition has expected value.
+
+## Core loop
+
+```text
+parent goal
+    │
+    ├─ deterministic complexity gate ── simple ──► stay single-agent
+    │
+    ▼
+cheap/primary lead planner
+    │  sparse DAG + value/difficulty/freshness
+    ▼
+wave scheduler
+    ├─ specialist A ─┐
+    ├─ specialist B ─┼─ parallel, isolated context capsules
+    └─ specialist C ─┘
+           │
+           ▼
+lead synthesizer
+    │
+    ├─ confidence / unresolved / evidence check
+    ├─ stop early when sufficient
+    └─ request only targeted follow-up work when marginal value remains
+           │
+           └────────────► next bounded round
+```
+
+The important distinction from a conventional layered Mixture-of-Agents is communication topology. In the original MoA formulation every agent in a layer consumes all outputs from the previous layer. That can improve answer quality, but causes the context copied between agents to grow quickly. v0.3 instead uses a dependency DAG: a worker sees only dependency reports it needs.
+
+Primary source: https://arxiv.org/abs/2406.04692
+
+## Why sparse communication
+
+AgentPrune identifies substantial redundancy in multi-agent message graphs and reports 28.1–72.8% token reductions in its evaluated systems while retaining competitive performance. AgentDropout dynamically removes redundant agents/edges and reports average prompt/completion token reductions of 21.6% and 18.4% respectively in its experiments.
+
+Those results do **not** prove one universal topology. They justify treating each agent and communication edge as a cost that must earn its place.
+
+- AgentPrune: https://arxiv.org/abs/2410.02506
+- AgentDropout: https://arxiv.org/abs/2503.18891
+- Dynamic coalition/value formulation: https://arxiv.org/abs/2608.07532
+
+The implementation therefore has three economic gates:
+
+1. `team_worthwhile()` refuses obviously simple work before any team-model call.
+2. the planner scores each proposed task with `expected_value`, `difficulty`, `critical`, and dependencies;
+3. the scheduler drops optional tasks whose simple marginal-utility proxy is below `utility_floor`.
+
+This is intentionally conservative. A later learned coalition selector can replace the heuristic only after held-out evaluation.
+
+## Context capsules
+
+Workers start from fresh bounded context rather than inheriting the parent's entire transcript. A capsule contains:
+
+- root goal;
+- assigned subtask;
+- success criteria;
+- constraints;
+- compact summaries of declared dependencies;
+- optionally, a semantically similar prior result as an **advisory hint**.
+
+Peer transcripts are never broadcast by default. This follows the useful isolation property in Hermes `delegate_task`, while adding explicit DAG dependencies and cost routing. Hermes also documents the practical value of keeping prompt prefixes stable for provider caching.
+
+References:
+- https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/features/delegation.md
+- https://github.com/NousResearch/hermes-agent/blob/main/website/docs/user-guide/configuration.md
+- https://github.com/NousResearch/hermes-agent/blob/main/website/docs/guides/tips.md
+
+## Progressive model routing
+
+No model is assumed to be globally “cheap enough” or “smart enough.” `CostAwareModelRouter` begins with a cold-start rule, then records outcomes by:
+
+```text
+(model, role, task profile, difficulty bucket)
+```
+
+After enough samples, the router uses an empirical success estimate to decide whether a cheap worker remains eligible for that task family. A cheap model that works well for classification can remain selected even at higher nominal difficulty; one that repeatedly fails code review will be bypassed for that bucket.
+
+This is deliberately simpler than a learned neural router, but it creates the data plane required to evolve toward one. LLMRouter's 2026 formulation supports treating routing as a sequential quality/cost decision rather than a static model choice.
+
+Reference: https://arxiv.org/abs/2608.06867
+
+## Three cache layers, not one
+
+### 1. Provider prefix/KV cache
+
+The runtime keeps policy/profile/tool material in a stable prefix and moves dynamic observations to a later suffix. This is useful because provider prompt caching generally rewards identical prefixes. OpenRouter documents provider sticky routing and cached-token accounting; Hermes similarly preserves/caches stable system and skill prefixes.
+
+- https://openrouter.ai/docs/guides/best-practices/prompt-caching
+- https://github.com/NousResearch/hermes-agent/blob/main/agent/prompt_caching.py
+
+### 2. Exact application cache
+
+A task with the same semantic text **and** workspace/context fingerprint can retrieve an exact previously verified work product with no model call. Plans can also be reused exactly.
+
+### 3. Semantic/vector work cache
+
+A local zero-cost hashing vectorizer supplies a baseline semantic index. It is intentionally replaceable by Qdrant/pgvector/another embedding backend later.
+
+Two thresholds are separated:
+
+- **direct zone**: only verified, direct-eligible, non-volatile work at a very high threshold may be returned as a result;
+- **reference zone**: a lower similarity can retrieve a prior analogue, but it is inserted only as a hint and the worker must redo/recheck the task.
+
+Unverified exact results are also reference-only. Volatile work cannot use semantic direct reuse.
+
+This separation is motivated by VectorQ's finding that a single global similarity threshold is inadequate and by Krites' static/verified promotion design. The current implementation is more conservative than either paper because a cache item's provenance/freshness and workspace fingerprint participate in eligibility.
+
+- VectorQ: https://arxiv.org/abs/2502.03771
+- Krites: https://arxiv.org/abs/2602.13165
+
+## What “verified” means in v0.3
+
+A worker result is eligible for direct cache promotion only when:
+
+- the child run succeeded;
+- it produced at least one concrete tool observation;
+- every observation used for that direct entry succeeded;
+- no observation is tagged `UNTRUSTED_EXTERNAL`;
+- the task is not volatile.
+
+Therefore a web/MCP-derived answer can still seed future retrieval, but never becomes direct semantic truth simply because its embedding is similar.
+
+This is deliberately strict. Future evaluators may allow domain-specific verification certificates (e.g. deterministic tests, immutable content hashes, signed datasets) to create safe direct-cache entries without relaxing the general rule.
+
+## Read-only workers and parent authority
+
+A specialist's sandbox mounts the host workspace read-only and copies it into a disposable container-local workspace before running commands. Team children do not receive the parent `fs_write` or writable `sandbox_command` tools. They can inspect, test, parse, benchmark, and propose changes; normal persistent writes remain a parent action and pass the normal policy/evidence/approval path.
+
+For production code-writing teams, the next step is not shared writes. It is one isolated Git worktree/overlay per child plus merge/rebase/test arbitration by the lead.
+
+## Strong loops without unlimited loops
+
+The synthesizer receives only compact reports, not entire child traces. It returns:
+
+- answer;
+- confidence;
+- unresolved items;
+- whether another round is justified;
+- explicit targeted follow-ups.
+
+Execution stops when confidence is high enough with no material unresolved issue, when no positive-value follow-up is requested, when agent/round limits are exhausted, or when the team cost cap is reached.
+
+This makes looping an **adaptive compute policy** rather than an unconditional fixed number of debate rounds.
+
+## Budget accounting
+
+Every provider-reported worker, planner and synthesis cost is summed by `team_orchestrate` and returned through tool metadata. The parent runtime adds this nested model cost to its own run budget. The team therefore cannot hide spending inside a tool call.
+
+Production should extend this from provider-reported model cost to a complete ledger including browser compute, embeddings, sandboxes, network services, and storage.
+
+## Vector backend roadmap
+
+The current hashing vectorizer is a no-dependency baseline, not the intended end state. The interface should evolve to support:
+
+1. dense semantic vectors;
+2. sparse lexical features;
+3. freshness/provenance filters;
+4. task/profile/model outcome metadata;
+5. multiple vector spaces for *goal intent*, *workspace state*, *procedure*, and *evidence* rather than one monolithic embedding;
+6. learned reuse thresholds by region/task family instead of one global threshold.
+
+That is where a separate vector-data project can become strategically important: the harness can consume a richer retrieval/caching substrate without coupling orchestration correctness to a particular database.
+
+## Falsifiable success criteria
+
+The team runtime should eventually be benchmarked against at least:
+
+- single primary agent;
+- single cheap agent;
+- fixed N-agent broadcast MoA;
+- static cheap/primary routing;
+- sparse v0.3 orchestration;
+- sparse v0.3 + semantic cache;
+- learned future coalition/router variants.
+
+Measure task success, judge-independent deterministic evidence where possible, total input/output/cached tokens, dollars, latency, agent count, cache reuse errors, and human interventions. “More agents” is not itself a success metric.

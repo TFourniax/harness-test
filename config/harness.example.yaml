@@ -8,6 +8,13 @@ primary:
   fallbacks: []
   timeout: 90
   num_retries: 2
+# Low-cost worker/orchestrator role. GPT-5 Mini is an example; replace with any model that
+# gives the best price/quality ratio for your workload.
+cheap:
+  model: openrouter/openai/gpt-5-mini
+  temperature: 0.1
+  max_tokens: 3500
+
 planner:
   model: openrouter/openai/gpt-5.5
   temperature: 0.0
@@ -39,6 +46,30 @@ blind_verification_enabled: true
 auto_maintenance_enabled: true
 maintenance_scan_runs: 50
 maintenance_out: .harness/proposals
+
+# Sparse, cost-aware multi-agent team. The parent agent calls team_orchestrate only when
+# decomposition/parallelism has material value. Workers never receive every peer transcript.
+team:
+  enabled: true
+  max_agents: 6
+  max_rounds: 3
+  max_tasks_per_plan: 8
+  worker_max_steps: 18
+  orchestrator_role: cheap
+  synthesizer_role: primary
+  cheap_max_difficulty: 0.62
+  utility_floor: 0.18
+  target_confidence: 0.86
+  max_report_chars: 5000
+  semantic_cache_enabled: true
+  semantic_cache_db: .harness/team-cache.sqlite3
+  # Two-zone vector cache: direct reuse is intentionally strict; lower similarities
+  # are supplied only as hints and must be re-checked by a worker.
+  semantic_direct_threshold: 0.985
+  semantic_reference_threshold: 0.90
+  stable_cache_ttl_seconds: 604800
+  volatile_cache_ttl_seconds: 600
+
 
 # Optional human communication channel. Keep secrets in the environment, never YAML.
 # A general-purpose tool-using agent must not be exposed as an open public bot.
