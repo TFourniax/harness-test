@@ -7,6 +7,7 @@ on:
     paths:
       - ".github/v06_finalize.py"
       - ".github/workflows/v06-finalize.yml"
+      - "src/adaptive_harness/orchestration/policy_arena.py"
   workflow_dispatch:
 
 permissions:
