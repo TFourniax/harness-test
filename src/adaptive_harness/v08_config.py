@@ -15,7 +15,9 @@ class MarginalDiversityConfig(BaseModel):
     db: str = ".harness/marginal-diversity.sqlite3"
     max_panel_attempts: int = Field(default=3, ge=1, le=4)
     min_samples: int = Field(default=5, ge=1, le=1000)
-    min_utility: float = Field(default=0.060, ge=0.0, le=1.0)
+    # Cold-start should prefer one good attempt. Extra rollouts need a meaningful expected
+    # verification gain; empirical bucket history can later overturn this conservative prior.
+    min_utility: float = Field(default=0.120, ge=0.0, le=1.0)
     cost_weight: float = Field(default=3.0, ge=0.0, le=1000.0)
     redundancy_floor: float = Field(default=0.24, ge=0.0, le=1.0)
 
