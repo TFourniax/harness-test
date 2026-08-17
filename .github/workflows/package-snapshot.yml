@@ -36,53 +36,50 @@ jobs:
             git apply --exclude=config/harness.example.yaml /tmp/v0.3-mod.patch
           fi
 
-          # config/harness.example.yaml differed slightly between the local 0.2 build
-          # snapshot and the GitHub 0.2 snapshot. Apply the semantic v0.3 additions
-          # deterministically rather than weakening patch validation for any other file.
           python - <<'PY'
           from pathlib import Path
 
           path = Path('config/harness.example.yaml')
           text = path.read_text(encoding='utf-8')
 
-          cheap = '''# Low-cost worker/orchestrator role. GPT-5 Mini is an example; replace with any model that
-# gives the best price/quality ratio for your workload.
-cheap:
-  model: openrouter/openai/gpt-5-mini
-  temperature: 0.1
-  max_tokens: 3500
-
-'''
+          cheap = (
+              "# Low-cost worker/orchestrator role. GPT-5 Mini is an example; replace with any model that\n"
+              "# gives the best price/quality ratio for your workload.\n"
+              "cheap:\n"
+              "  model: openrouter/openai/gpt-5-mini\n"
+              "  temperature: 0.1\n"
+              "  max_tokens: 3500\n\n"
+          )
           if '\ncheap:\n' not in text:
               anchor = '  num_retries: 2\n'
               if anchor not in text:
                   raise SystemExit('primary role anchor not found in config/harness.example.yaml')
               text = text.replace(anchor, anchor + cheap, 1)
 
-          team = '''# Sparse, cost-aware multi-agent team. The parent agent calls team_orchestrate only when
-# decomposition/parallelism has material value. Workers never receive every peer transcript.
-team:
-  enabled: true
-  max_agents: 6
-  max_rounds: 3
-  max_tasks_per_plan: 8
-  worker_max_steps: 18
-  orchestrator_role: cheap
-  synthesizer_role: primary
-  cheap_max_difficulty: 0.62
-  utility_floor: 0.18
-  target_confidence: 0.86
-  max_report_chars: 5000
-  semantic_cache_enabled: true
-  semantic_cache_db: .harness/team-cache.sqlite3
-  # Two-zone vector cache: direct reuse is intentionally strict; lower similarities
-  # are supplied only as hints and must be re-checked by a worker.
-  semantic_direct_threshold: 0.985
-  semantic_reference_threshold: 0.90
-  stable_cache_ttl_seconds: 604800
-  volatile_cache_ttl_seconds: 600
-
-'''
+          team = (
+              "# Sparse, cost-aware multi-agent team. The parent agent calls team_orchestrate only when\n"
+              "# decomposition/parallelism has material value. Workers never receive every peer transcript.\n"
+              "team:\n"
+              "  enabled: true\n"
+              "  max_agents: 6\n"
+              "  max_rounds: 3\n"
+              "  max_tasks_per_plan: 8\n"
+              "  worker_max_steps: 18\n"
+              "  orchestrator_role: cheap\n"
+              "  synthesizer_role: primary\n"
+              "  cheap_max_difficulty: 0.62\n"
+              "  utility_floor: 0.18\n"
+              "  target_confidence: 0.86\n"
+              "  max_report_chars: 5000\n"
+              "  semantic_cache_enabled: true\n"
+              "  semantic_cache_db: .harness/team-cache.sqlite3\n"
+              "  # Two-zone vector cache: direct reuse is intentionally strict; lower similarities\n"
+              "  # are supplied only as hints and must be re-checked by a worker.\n"
+              "  semantic_direct_threshold: 0.985\n"
+              "  semantic_reference_threshold: 0.90\n"
+              "  stable_cache_ttl_seconds: 604800\n"
+              "  volatile_cache_ttl_seconds: 600\n\n"
+          )
           if '\nteam:\n' not in text:
               anchor = 'maintenance_out: .harness/proposals\n'
               if anchor not in text:
