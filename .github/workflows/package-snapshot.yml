@@ -25,78 +25,6 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Apply verified staged v0.3 source upgrade
-        shell: bash
-        run: |
-          set -euo pipefail
-          if compgen -G ".github/upgrade-v0.3.mod.part-*" > /dev/null; then
-            cat .github/upgrade-v0.3.mod.part-* > /tmp/v0.3-mod.patch
-            echo "5c8bf346d0c9cff4426c85025f60c4ed565ee1db31d3afabe096b8d8d4970f2c  /tmp/v0.3-mod.patch" | sha256sum -c -
-            git apply --check --exclude=config/harness.example.yaml /tmp/v0.3-mod.patch
-            git apply --exclude=config/harness.example.yaml /tmp/v0.3-mod.patch
-          fi
-
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path('config/harness.example.yaml')
-          text = path.read_text(encoding='utf-8')
-
-          cheap = (
-              "# Low-cost worker/orchestrator role. GPT-5 Mini is an example; replace with any model that\n"
-              "# gives the best price/quality ratio for your workload.\n"
-              "cheap:\n"
-              "  model: openrouter/openai/gpt-5-mini\n"
-              "  temperature: 0.1\n"
-              "  max_tokens: 3500\n\n"
-          )
-          if '\ncheap:\n' not in text:
-              anchor = '  num_retries: 2\n'
-              if anchor not in text:
-                  raise SystemExit('primary role anchor not found in config/harness.example.yaml')
-              text = text.replace(anchor, anchor + cheap, 1)
-
-          team = (
-              "# Sparse, cost-aware multi-agent team. The parent agent calls team_orchestrate only when\n"
-              "# decomposition/parallelism has material value. Workers never receive every peer transcript.\n"
-              "team:\n"
-              "  enabled: true\n"
-              "  max_agents: 6\n"
-              "  max_rounds: 3\n"
-              "  max_tasks_per_plan: 8\n"
-              "  worker_max_steps: 18\n"
-              "  orchestrator_role: cheap\n"
-              "  synthesizer_role: primary\n"
-              "  cheap_max_difficulty: 0.62\n"
-              "  utility_floor: 0.18\n"
-              "  target_confidence: 0.86\n"
-              "  max_report_chars: 5000\n"
-              "  semantic_cache_enabled: true\n"
-              "  semantic_cache_db: .harness/team-cache.sqlite3\n"
-              "  # Two-zone vector cache: direct reuse is intentionally strict; lower similarities\n"
-              "  # are supplied only as hints and must be re-checked by a worker.\n"
-              "  semantic_direct_threshold: 0.985\n"
-              "  semantic_reference_threshold: 0.90\n"
-              "  stable_cache_ttl_seconds: 604800\n"
-              "  volatile_cache_ttl_seconds: 600\n\n"
-          )
-          if '\nteam:\n' not in text:
-              anchor = 'maintenance_out: .harness/proposals\n'
-              if anchor not in text:
-                  raise SystemExit('maintenance anchor not found in config/harness.example.yaml')
-              text = text.replace(anchor, anchor + '\n' + team, 1)
-
-          path.write_text(text, encoding='utf-8')
-          PY
-
-          if compgen -G ".github/upgrade-v0.3.new.part-*" > /dev/null; then
-            cat .github/upgrade-v0.3.new.part-* > /tmp/v0.3-new.patch
-            echo "94185caa140518b3ff2d2093dfcd3602b6b3378122c77036db3996411892a4b2  /tmp/v0.3-new.patch" | sha256sum -c -
-            git apply --check /tmp/v0.3-new.patch
-            git apply /tmp/v0.3-new.patch
-          fi
-          rm -f .github/upgrade-v0.3.mod.part-* .github/upgrade-v0.3.new.part-* .github/upgrade-v0.3.patch.gz
-
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
@@ -106,6 +34,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e '.[dev]'
+          rm -rf src/*.egg-info
 
       - name: Resolve package version
         shell: bash
@@ -147,6 +76,8 @@ jobs:
               rel = p.relative_to(root)
               if rel.parts[0] in exclude_top:
                   continue
+              if any(part.endswith('.egg-info') for part in rel.parts):
+                  continue
               if rel.name == 'SOURCE_MANIFEST.sha256':
                   continue
               if '__pycache__' in rel.parts or rel.suffix == '.pyc':
@@ -175,6 +106,8 @@ jobs:
                   continue
               rel = p.relative_to(root)
               if rel.parts[0] in exclude_top:
+                  continue
+              if any(part.endswith('.egg-info') for part in rel.parts):
                   continue
               if '__pycache__' in rel.parts or rel.suffix == '.pyc':
                   continue
@@ -207,7 +140,7 @@ jobs:
           )
           rm -rf artifacts/package-verify
 
-      - name: Commit verified source and binary snapshot to branch
+      - name: Commit verified binary snapshot to branch
         shell: bash
         run: |
           set -euo pipefail
@@ -218,5 +151,5 @@ jobs:
             echo "Verified package is already current."
             exit 0
           fi
-          git commit -m "Implement verified harness ${HARNESS_VERSION} snapshot"
+          git commit -m "Refresh verified harness ${HARNESS_VERSION} snapshot"
           git push origin "HEAD:${GITHUB_REF_NAME}"
