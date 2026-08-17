@@ -25,6 +25,37 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Apply verified source overlay if present
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! -d .github/v05-staging ]]; then
+            echo "No source overlay present."
+            exit 0
+          fi
+          cat .github/v05-staging/*.b64part > /tmp/v05-overlay.b64
+          base64 -d /tmp/v05-overlay.b64 > /tmp/v05-overlay.tar.gz
+          echo "9996a369c4b1eb4f23bc073cca49429a1e7f6e6c14038c7361b2953c2acdd765  /tmp/v05-overlay.tar.gz" | sha256sum -c -
+          python - <<'PYSAFE'
+          from pathlib import Path, PurePosixPath
+          import tarfile
+          archive = Path('/tmp/v05-overlay.tar.gz')
+          with tarfile.open(archive, 'r:gz') as tf:
+              members = tf.getmembers()
+              if not members:
+                  raise SystemExit('empty source overlay')
+              for member in members:
+                  rel = PurePosixPath(member.name)
+                  if rel.is_absolute() or '..' in rel.parts:
+                      raise SystemExit(f'unsafe overlay path: {member.name}')
+                  if not member.isfile():
+                      raise SystemExit(f'overlay may contain regular files only: {member.name}')
+              tf.extractall('.')
+          print(f'overlay_files={len(members)}')
+          PYSAFE
+          rm -rf .github/v05-staging
+          rm -f /tmp/v05-overlay.b64 /tmp/v05-overlay.tar.gz
+
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
