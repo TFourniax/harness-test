@@ -1,0 +1,155 @@
+name: Package harness snapshot
+
+on:
+  push:
+    branches:
+      - agent/import-harness-telegram
+    paths-ignore:
+      - "artifacts/**"
+      - "SOURCE_MANIFEST.sha256"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: package-harness-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-package-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install project and test dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e '.[dev]'
+          rm -rf src/*.egg-info
+
+      - name: Resolve package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="$(python - <<'PY'
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              print(tomllib.load(f)['project']['version'])
+          PY
+          )"
+          echo "HARNESS_VERSION=${VERSION}" >> "$GITHUB_ENV"
+          echo "HARNESS_ZIP=artifacts/adaptive-agent-harness-${VERSION}.zip" >> "$GITHUB_ENV"
+
+      - name: Verify source snapshot
+        run: |
+          python -m pytest -q
+          python -m compileall -q src tests
+          python -m ruff check --select E9,F63,F7,F82 src tests
+
+      - name: Build source manifest and deterministic ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf artifacts/package-verify
+          mkdir -p artifacts
+          rm -f "$HARNESS_ZIP" "$HARNESS_ZIP.sha256" SOURCE_MANIFEST.sha256
+
+          python - <<'PY'
+          from pathlib import Path
+          import hashlib
+
+          root = Path('.')
+          exclude_top = {'.git', '.venv', '.pytest_cache', '.ruff_cache', '.harness', 'artifacts'}
+          files = []
+          for p in root.rglob('*'):
+              if not p.is_file():
+                  continue
+              rel = p.relative_to(root)
+              if rel.parts[0] in exclude_top:
+                  continue
+              if any(part.endswith('.egg-info') for part in rel.parts):
+                  continue
+              if rel.name == 'SOURCE_MANIFEST.sha256':
+                  continue
+              if '__pycache__' in rel.parts or rel.suffix == '.pyc':
+                  continue
+              files.append(rel)
+
+          lines = []
+          for rel in sorted(files, key=lambda p: p.as_posix()):
+              digest = hashlib.sha256((root / rel).read_bytes()).hexdigest()
+              lines.append(f'{digest}  {rel.as_posix()}')
+          (root / 'SOURCE_MANIFEST.sha256').write_text('\n'.join(lines) + '\n', encoding='utf-8')
+          print(f'manifest_files={len(files)}')
+          PY
+
+          python - <<'PY'
+          from pathlib import Path
+          import os
+          import zipfile
+
+          root = Path('.').resolve()
+          out = root / os.environ['HARNESS_ZIP']
+          exclude_top = {'.git', '.venv', '.pytest_cache', '.ruff_cache', '.harness', 'artifacts'}
+          files = []
+          for p in root.rglob('*'):
+              if not p.is_file():
+                  continue
+              rel = p.relative_to(root)
+              if rel.parts[0] in exclude_top:
+                  continue
+              if any(part.endswith('.egg-info') for part in rel.parts):
+                  continue
+              if '__pycache__' in rel.parts or rel.suffix == '.pyc':
+                  continue
+              files.append(rel)
+
+          with zipfile.ZipFile(out, 'w', compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+              for rel in sorted(files, key=lambda p: p.as_posix()):
+                  data = (root / rel).read_bytes()
+                  info = zipfile.ZipInfo(rel.as_posix(), date_time=(2020, 1, 1, 0, 0, 0))
+                  info.compress_type = zipfile.ZIP_DEFLATED
+                  info.external_attr = (0o100644 & 0xFFFF) << 16
+                  z.writestr(info, data, compress_type=zipfile.ZIP_DEFLATED, compresslevel=9)
+          print(f'zip_bytes={out.stat().st_size}')
+          PY
+
+          sha256sum "$HARNESS_ZIP" > "$HARNESS_ZIP.sha256"
+
+      - name: Re-extract and retest packaged archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf artifacts/package-verify
+          mkdir -p artifacts/package-verify
+          unzip -q "$HARNESS_ZIP" -d artifacts/package-verify
+          (
+            cd artifacts/package-verify
+            python -m pytest -q
+            python -m compileall -q src tests
+            python -m ruff check --select E9,F63,F7,F82 src tests
+          )
+          rm -rf artifacts/package-verify
+
+      - name: Commit verified binary snapshot to branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Verified package is already current."
+            exit 0
+          fi
+          git commit -m "Refresh verified harness ${HARNESS_VERSION} snapshot"
+          git push origin "HEAD:${GITHUB_REF_NAME}"

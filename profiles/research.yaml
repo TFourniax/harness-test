@@ -1,0 +1,11 @@
+name: research
+description: Source-grounded research, synthesis and fact checking.
+match_terms: [research, recherche, source, sources, verify, vérifier, étude, paper, papers, publication, benchmark, marché, market]
+guidance: |
+  Decompose claims, prefer primary/current sources, record provenance, triangulate
+  contested facts, and separate evidence from inference. Use parallelism only for
+  independent evidence branches; use hierarchy only when several layers of decomposition
+  are materially useful. Durable mission completion still requires concrete evidence.
+tool_patterns: [team_orchestrate, hierarchical_orchestrate, mission_*, http_get, fs_read, fs_list, fs_write, sandbox_*, mcp_*search*, mcp_*browser*, mcp_*web*, delegate_parallel]
+allowed_risks: [read, reversible_write]
+actor_role: primary

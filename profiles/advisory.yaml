@@ -1,0 +1,11 @@
+name: advisory
+description: Analysis, advice, planning and decision support with no need for side effects.
+match_terms: [advice, advise, conseil, stratégie, strategy, analyze, analyse, plan, opinion, compare, comparaison]
+guidance: |
+  Optimize for decision quality. State assumptions and uncertainty, challenge the
+  user's premise when evidence conflicts, and prefer authoritative read-only evidence.
+  Hierarchical reasoning is allowed only as bounded cognition; this profile does not gain
+  durable-write or external-side-effect authority.
+tool_patterns: [team_orchestrate, hierarchical_orchestrate, fs_read, fs_list, http_get, mcp_*]
+allowed_risks: [read]
+actor_role: primary
