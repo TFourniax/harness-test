@@ -1,115 +1,178 @@
 # Validation Snapshot
 
 Date: 2026-08-17
-Version: **0.4.0**
+Version: **0.5.0**
 
-This file records what was actually checked in the GitHub Actions build environment. It is intentionally narrower than a production certification or a universal performance claim.
+This document records what the automated build has actually checked. It is intentionally narrower than a production certification or a universal performance claim.
 
-## Passed in the current v0.4 build
+## Current reference suite
 
-- `pytest -q`: **65 passed** after the v0.4 cache-semantics correction.
-- `python -m compileall -q src tests`: passed.
-- Ruff critical-error checks (`E9,F63,F7,F82`): passed.
-- Package installation and 0.4.0 console-entrypoint resolution: passed.
-- The deterministic package ZIP is extracted into a clean directory and the complete pytest/compile/Ruff validation is executed again from the extracted archive before the snapshot is accepted.
-- CLI imports and existing command registration remain covered by the package/import validation path.
-- Capability policy, exact action approval/resume, non-idempotent execution ledger, evidence gate, profile ceilings, tool-schema validation, and session persistence remain covered.
-- HTTP SSRF defenses cover private/local destinations and redirect behavior.
-- MCP tests cover stateless request metadata, default-deny tool import, local policy mapping, schema fingerprint drift rejection, and external-output trust labeling.
-- Self-write firewall, root-of-trust patch protection, regression evaluation, promotion gate, recurring weakness mining, and skill-evolution quarantine remain covered.
+The first complete v0.5 source snapshot passed:
 
-## v0.4 Adaptive Compute Economy validation
+- `pytest -q`: **83 passed**;
+- `python -m compileall -q src tests`;
+- Ruff critical-error checks (`E9,F63,F7,F82`);
+- installation and `0.5.0` package/entrypoint resolution;
+- deterministic source-manifest generation;
+- deterministic ZIP generation;
+- extraction into a clean directory;
+- the complete **83-test + compile + Ruff** validation again from the extracted ZIP.
 
-Deterministic tests cover:
+The final acceptance run is also required to execute directly from committed source without a staging overlay.
 
-- cold-start compute allocation by task difficulty and criticality;
-- easy non-critical work selecting a cheap single attempt;
-- medium work selecting two deliberately independent cheap attempts when slots allow;
-- hard non-critical work escalating to a primary attempt;
-- high-difficulty critical work selecting a mixed cheap + primary independent pair;
-- actual child-attempt accounting, so redundant pairs consume two `max_agents` slots;
-- remaining-slot downgrade from a pair strategy to an appropriate single strategy;
-- budget pressure excluding estimated over-budget compute shapes;
-- high-confidence/low-marginal-gain stopping before another worker call;
-- persistent empirical strategy outcomes changing later compute decisions;
-- provider-reported child/model cost propagation through team metadata and into the parent budget path;
-- targeted bounded team rounds remaining compatible with the existing sparse DAG/synthesis loop.
+## Existing trust/runtime coverage
 
-The compute controller is therefore executable and stateful, not only an architectural document. Its current success signal still uses operational success plus synthesis-confidence gain; that is **not** equivalent to a domain-grounded correctness certificate.
+The retained suite covers the previously implemented capability and execution boundaries, including:
 
-## v0.4 multi-space cache validation
+- capability policy and profile ceilings;
+- exact high-impact approval and resume;
+- non-idempotent execution ledger;
+- evidence gate and blind high-impact verification;
+- session persistence;
+- tool-schema validation;
+- HTTP SSRF/private-destination and redirect handling;
+- default-deny MCP import and schema fingerprint checks;
+- runtime self-write firewall;
+- self-improvement root-of-trust protection;
+- isolated regression/security evaluation and human promotion;
+- skill quarantine;
+- Telegram default-deny access, durable cursor/session identity and cross-session approval protection.
 
-Tests cover separate intent/procedure/entity/full representations and the guarded direct-reuse path:
-
-- exact verified work remains reusable inside the same workspace fingerprint;
-- a semantically similar task aimed at different material entities is demoted to a reference hint rather than direct reuse;
-- close paraphrases with the same material target can reuse verified work when all direct gates pass;
-- procedure synonyms such as audit/review/inspect are canonicalized into procedural families instead of weakening the similarity threshold;
-- workspace fingerprints continue to isolate cache state;
-- negative reuse feedback can tighten the direct semantic threshold after the calibration sample floor;
-- unverified and volatile work retain the conservative v0.3 reference-only/direct-reuse restrictions.
-
-The local multi-space implementation uses SQLite and deterministic feature hashing. No external vector database or embedding API is required for the validated path.
-
-## Team runtime validation retained from v0.3
+## Sparse team coverage retained
 
 Tests continue to cover:
 
-- sparse team planning into a dependency DAG;
-- independent parallel workers;
-- compact context capsules rather than broadcast peer transcripts;
-- targeted second-round follow-up after synthesis finds a material gap;
-- zero-token team rejection for obviously simple work;
-- context-scoped exact cache reuse;
-- empirical cheap/primary routing adaptation when the v0.4 economy is disabled;
-- read-only specialist execution as a registered capability, while host-write tools are removed from child registries.
+- zero-token rejection of obviously simple team work;
+- sparse dependency-DAG planning;
+- concurrent independent workers;
+- bounded context capsules instead of broadcast peer transcripts;
+- targeted follow-up rounds;
+- child-attempt accounting against `max_agents`;
+- parent-level nested model-cost accounting;
+- cheap/primary routing fallback paths;
+- read-only specialist capability with persistent host-write tools removed from child registries.
 
-## Channel validation retained from v0.2
+## v0.4 economic/cache coverage retained
 
-The Telegram/channel layer is covered by deterministic tests for:
+The v0.4 tests remain in the v0.5 suite and cover:
 
-- default-deny user authorization;
-- optional chat allowlisting;
-- private-chat defaults;
-- callback payload size and message chunking;
-- stable per-human/per-conversation session identity;
-- durable update cursor storage;
-- exact action fingerprint approvals;
-- prevention of cross-session approvals.
+- cold-start compute shape selection;
+- cheap single/pair, primary and mixed-pair paths;
+- slot-aware pair downgrade;
+- high-confidence stop behavior;
+- budget pressure;
+- stateful routing outcomes;
+- multi-space intent/procedure/entity/full cache representation;
+- procedural synonym canonicalization;
+- entity mismatch demotion to reference-only;
+- workspace fingerprint isolation;
+- negative cache-feedback threshold tightening.
 
-No live Telegram token was used in the validation environment.
+## v0.5 verification-certificate coverage
 
-## Not live-tested / not yet proven
+New deterministic tests cover:
 
-The following claims are deliberately **not** made by v0.4:
+- strong task-bound deterministic passes;
+- task-relevant deterministic failures producing refutation;
+- multi-source external support;
+- model-only success receiving very weak evidence weight;
+- a task-unrelated compile/build check **not** being allowed to certify unrelated research or advisory work;
+- verification metadata and evidence references being preserved in reports.
 
-- no representative real-provider benchmark yet proves dollar/token savings on OpenRouter, Replicate, Anthropic, OpenAI-compatible endpoints, or other LiteLLM providers;
-- no statistically meaningful held-out benchmark yet proves that v0.4 beats sparse v0.3 or fixed broadcast MoA on a real cross-domain workload;
-- real provider prompt/KV cache hit rates and cached-token accounting have not yet been measured;
-- semantic-cache false-direct-reuse rate has not yet been measured over a representative production trace corpus;
-- the compute market has not yet been trained/replaced by an offline learned policy, and no such learned policy is trusted by default;
-- synthesis confidence is not treated as a proof of correctness; future market updates should prefer domain-specific verification certificates;
-- real Docker specialist execution is not exercised in GitHub-hosted CI; production hostile-code execution should use stronger microVM/gVisor/Firecracker-class isolation;
-- production network egress enforcement still requires infrastructure controls in addition to application SSRF defenses;
-- real external side-effect adapters such as email, payments, CRM, browser or cloud writes require staging tests and explicit local policy;
-- multi-agent persistent code writes using isolated Git worktrees/overlays plus merge arbitration are not yet implemented;
-- production-scale Qdrant/pgvector/custom vector backends are not required and not benchmarked;
-- the complete external long-horizon Manage–Execute–Audit task-state plane remains a production-roadmap item.
+The relevance calculation is deliberately based on the assigned task/profile rather than allowing a verification command's own claim text to declare itself relevant.
 
-## Production acceptance condition
+## v0.5 evidence tools
 
-Before calling a deployment production-ready, benchmark the same harness/model combinations on held-out task suites for coding, source-grounded research, scraping, operations, advisory work, prompt injection, tool poisoning, long-horizon recovery, cost, latency and cache safety.
+Tests cover the verification command allowlist and rejection of arbitrary commands from the deterministic-verification lane.
 
-At minimum compare:
+`verify_workspace_command` is constrained to recognized test/lint/typecheck/compile/build families and runs through the disposable read-only-host sandbox primitive. `source_fetch` keeps retrieved content untrusted while attaching provenance metadata.
+
+Real Docker execution is not exercised by the GitHub-hosted reference suite when the required audited/preinstalled images are unavailable; the policy/registration/classification path is still tested.
+
+## v0.5 confidence calibration
+
+Tests cover:
+
+- shrinking raw model confidence when evidence is weak;
+- lifting confidence when strong deterministic evidence is present;
+- capping confidence after deterministic refutation;
+- failed/unresolved trajectory penalties;
+- the labelled calibration store being separate from live self-labelled success.
+
+A raw synthesis confidence value is therefore not treated as a correctness certificate.
+
+## v0.5 evidence-weighted compute market
+
+Tests cover:
+
+- model-only/weak-evidence outcomes having little routing influence;
+- repeated strong-evidence failure being able to overturn a cheap strategy;
+- evidence mass and success mass persistence;
+- day-scale temporal forgetting;
+- no meaningless sub-minute numerical decay;
+- hard budget semantics: if no compute shape fits remaining budget, the market stops even on critical work;
+- actual child/provider cost remaining charged to the parent budget after execution.
+
+## v0.5 adaptive evidence loop
+
+A dedicated test covers the case where raw synthesis confidence is high but the trajectory is weakly evidenced. When slots/round/budget allow, the orchestrator can reopen one bounded verification-focused follow-up instead of treating confidence alone as completion.
+
+## v0.5 policy arena
+
+Tests cover:
+
+- live/shadow observations not being sufficient for promotion;
+- paired benchmark trials on matching task keys;
+- minimum evidence strength for benchmark contribution;
+- quality/cost/pass-rate comparison gates;
+- exact comparison fingerprint generation;
+- promotion only with the reviewed exact fingerprint;
+- stale fingerprint rejection after comparison data changes.
+
+The policy arena can change economic preferences only; it cannot expand capabilities, approvals, agent limits, round limits or cost ceilings.
+
+## v0.5 trust-kernel protection
+
+The self-evolution immutable set now includes the components that decide what counts as verification/evidence and what compute policy may be promoted:
+
+- evidence tools;
+- verification engine;
+- confidence calibration;
+- compute market;
+- policy arena;
+- benchmark runner;
+- v0.5 CLI/control wiring.
+
+These components may be changed by normal reviewed development, but not silently auto-promoted by the harness itself.
+
+## Not yet proven / not live-tested
+
+v0.5 deliberately does **not** claim:
+
+- statistically meaningful dollar/token superiority on representative OpenRouter, Replicate, Anthropic, OpenAI-compatible or other provider workloads;
+- universal quality superiority over sparse v0.4, Hermes, broadcast MoA or another public/private harness;
+- calibrated real-provider prompt/KV-cache hit rates;
+- production semantic-cache false-direct-reuse rate over a representative trace corpus;
+- production hostile-code isolation; microVM/gVisor/Firecracker-class controls remain a stronger target than the reference Docker sandbox;
+- production-scale Qdrant/pgvector/custom vector backend performance;
+- persistent multi-agent code-writing worktrees with merge/rebase arbitration;
+- a complete external long-horizon Manage–Execute–Audit task-state plane;
+- that source diversity alone proves factual correctness;
+- that a passing deterministic command proves claims outside the check's covered scope.
+
+## Next empirical acceptance gate
+
+On held-out real workloads, compare at minimum:
 
 1. single primary agent;
 2. single cheap agent;
 3. fixed N-agent broadcast MoA;
-4. sparse v0.3 orchestration;
-5. v0.4 adaptive compute with semantic direct reuse disabled;
-6. v0.4 adaptive compute + multi-space cache;
-7. any future learned compute policy.
+4. sparse v0.3;
+5. adaptive v0.4;
+6. v0.5 with semantic direct reuse disabled;
+7. full v0.5;
+8. challenger policies proposed by the policy arena.
 
-Track task success using deterministic/domain evidence where possible, total input/output/cached tokens, dollars, latency, child attempts, rounds, direct/reference cache hits, false direct-reuse rate, quality gain per dollar and human interventions.
+Use domain-grounded deterministic/oracle evidence where possible. Track task success, evidence strength, input/output/cached tokens, dollars, latency, child attempts, rounds, cache direct/reference hits, false direct-reuse, quality gain per dollar and human intervention.
 
-Keep the held-out eval bank outside candidate writable boundaries. A new routing/evolution policy should become champion only with reproducible evidence and a rollback path; adaptive economics never override capability or human-approval boundaries.
+Keep held-out benchmark truth outside candidate-writable boundaries. A future policy becomes champion only through reproducible paired evidence and an exact reviewed promotion fingerprint.
