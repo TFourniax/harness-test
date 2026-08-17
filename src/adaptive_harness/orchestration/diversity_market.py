@@ -27,8 +27,15 @@ class PanelAttempt(BaseModel):
     succeeded: bool = True
     cost_usd: float = Field(default=0.0, ge=0.0)
     confidence: float = Field(default=0.5, ge=0.0, le=1.0)
+    # Exact call IDs remain the audit trail. Canonical channels collapse repeated invocations of the
+    # same tool+arguments so two agents cannot manufacture independence by rereading the same source.
     evidence_refs: list[str] = Field(default_factory=list)
+    evidence_channels: list[str] = Field(default_factory=list)
     verification: VerificationCertificate = Field(default_factory=VerificationCertificate)
+
+    def independence_evidence(self) -> set[str]:
+        values = self.evidence_channels or self.evidence_refs
+        return {str(value) for value in values if str(value)}
 
 
 class IndependenceBreakdown(BaseModel):
@@ -54,8 +61,10 @@ class IndependenceScorer:
     """Estimate whether one attempt opens a genuinely different information channel.
 
     Textual disagreement is intentionally a minority signal. Two fluent answers with no concrete
-    evidence do not become trustworthy merely because their wording differs. New evidence references
-    dominate the score, followed by answer semantics, deliberate method diversity and model diversity.
+    evidence do not become trustworthy merely because their wording differs. Canonical evidence
+    channels dominate the score, followed by answer semantics, deliberate method diversity and model
+    diversity. Exact call IDs are used only as a backward-compatible fallback when a runtime cannot
+    yet provide canonical provenance.
     """
 
     def __init__(self, dimensions: int = 384) -> None:
@@ -74,8 +83,8 @@ class IndependenceScorer:
         return _clamp(1.0 - len(intersection) / max(1, len(union)))
 
     def pair(self, candidate: PanelAttempt, prior: PanelAttempt) -> IndependenceBreakdown:
-        candidate_evidence = set(candidate.evidence_refs)
-        prior_evidence = set(prior.evidence_refs)
+        candidate_evidence = candidate.independence_evidence()
+        prior_evidence = prior.independence_evidence()
         evidence = self._evidence_novelty(candidate_evidence, prior_evidence)
         a = self.vectorizer.encode(candidate.answer)
         b = self.vectorizer.encode(prior.answer)
@@ -101,7 +110,7 @@ class IndependenceScorer:
         if not prior_attempts:
             return IndependenceBreakdown(
                 score=1.0,
-                evidence_novelty=1.0 if candidate.evidence_refs else 0.0,
+                evidence_novelty=1.0 if candidate.independence_evidence() else 0.0,
                 answer_novelty=1.0,
                 method_novelty=1.0,
                 model_novelty=1.0,
