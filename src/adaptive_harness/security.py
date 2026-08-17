@@ -18,7 +18,8 @@ HARNESS_RUNTIME_SELF_WRITE_PROTECTED = (
 
 # The self-improvement pipeline may evolve task-solving components, but not the trust,
 # authorization, verification, evaluation or compute-policy-promotion boundaries that
-# decide what counts as evidence or what may become the active policy.
+# decide what counts as evidence, what work is durably complete, or how hard resource
+# ceilings/leases are enforced.
 IMMUTABLE_FROM_SELF_EVOLUTION = (
     "tests/",
     "evals/",
@@ -29,6 +30,8 @@ IMMUTABLE_FROM_SELF_EVOLUTION = (
     "src/adaptive_harness/cli.py",
     "src/adaptive_harness/v05_cli.py",
     "src/adaptive_harness/v06_cli.py",
+    "src/adaptive_harness/v07_cli.py",
+    "src/adaptive_harness/v07_config.py",
     "src/adaptive_harness/channels/",
     "src/adaptive_harness/providers/",
     "src/adaptive_harness/runtime/policy.py",
@@ -46,6 +49,10 @@ IMMUTABLE_FROM_SELF_EVOLUTION = (
     "src/adaptive_harness/orchestration/benchmark.py",
     "src/adaptive_harness/orchestration/state_plane.py",
     "src/adaptive_harness/orchestration/context_budget.py",
+    "src/adaptive_harness/orchestration/distributed_control.py",
+    "src/adaptive_harness/orchestration/cell_runtime.py",
+    "src/adaptive_harness/orchestration/mission_dispatcher.py",
+    "src/adaptive_harness/orchestration/hierarchical_service.py",
     "src/adaptive_harness/improvement/governance.py",
     "src/adaptive_harness/improvement/patch_security.py",
     "src/adaptive_harness/improvement/evaluator.py",
