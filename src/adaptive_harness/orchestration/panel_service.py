@@ -138,8 +138,10 @@ class IndependenceAwarePanelRunner:
         threshold = 0.82
         if self.config.team is not None:
             threshold = self.config.team.economy.primary_preferred_difficulty
+        # Hard/critical panels deliberately alternate model tiers: a strong first solution, a cheaper
+        # disconfirming second lane, then premium again only if a third marginal channel is justified.
         if spec.critical or spec.difficulty >= threshold:
-            return "primary" if slot_index in {1, 2} else "cheap"
+            return "primary" if slot_index in {1, 3} else "cheap"
         if slot_index == 3 and spec.difficulty >= 0.62:
             return "primary"
         return "cheap"
@@ -179,6 +181,18 @@ class IndependenceAwarePanelRunner:
             difficulty=spec.difficulty,
             critical=spec.critical,
         )
+
+    @staticmethod
+    def _evidence_channels(result: RunResult) -> list[str]:
+        channels: list[str] = []
+        for obs in result.observations:
+            if not obs.ok:
+                continue
+            channel = obs.metadata.get("provenance_fingerprint") or obs.call_id
+            value = str(channel)
+            if value and value not in channels:
+                channels.append(value)
+        return channels
 
     async def _run_one(
         self,
@@ -229,6 +243,7 @@ class IndependenceAwarePanelRunner:
             cost_usd=max(0.0, float(result.reported_cost_usd)),
             confidence=confidence,
             evidence_refs=list(dict.fromkeys(obs.call_id for obs in result.observations if obs.ok)),
+            evidence_channels=self._evidence_channels(result),
             verification=certificate,
         )
 
