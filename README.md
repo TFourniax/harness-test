@@ -1,14 +1,19 @@
 # Adaptive Agent Harness
 
-A model-agnostic control plane for long-lived AI agents that can research, scrape, code, use tools, work as a governed team, learn from traces, and improve their own orchestration **without being allowed to silently weaken the live trust boundary**.
+A model-agnostic control plane for long-lived AI agents that can research, scrape, code, use tools,
+operate as bounded teams, preserve durable mission state, learn from evidence, and improve their own
+orchestration **without being allowed to silently weaken the live trust boundary**.
 
 The design objective is:
 
-> **maximum task quality for the minimum justified compute, under evidence, bounded capabilities, durable state, independent verification, and human-governed evolution.**
+> **maximum task quality for the minimum justified compute, under evidence, bounded capabilities,
+> durable state, independent verification, recoverable execution, and human-governed evolution.**
 
-**Current frontier snapshot: v0.5.0 — Evidence-Grounded Compute Economy.** The reference suite currently contains **83 tests**. GitHub Actions verifies source, compilation and critical Ruff checks, builds a deterministic ZIP, extracts it into a clean directory, and executes the full validation suite again before accepting the snapshot.
-
-This is a research/reference implementation, not a claim of universal superiority or production certification. Real provider-backed held-out benchmarks remain the gate for claims about quality, dollar savings, latency or superiority to another harness.
+**Current frontier snapshot: v0.7.0 — Distributed Reasoning Cells.** v0.7 adds recoverable task leases,
+hierarchical dollar escrow, separate cell/leaf-attempt ceilings, explicit partial/blocked completion
+states, a lease-safe Mission Dispatcher, and a zero-token gate that prevents paying for hierarchy on
+flat work. The release remains a research/reference implementation: provider-backed held-out benchmarks
+are still required before claiming universal quality or cost superiority.
 
 ## Architecture
 
@@ -20,83 +25,106 @@ human / Telegram / API
           │
  capability + approval policy
           │
-          ├──────── simple task ─────────► single-agent loop
+          ├──────── simple task ───────────────► single-agent loop
           │
-          ▼
-    team_orchestrate
+          ├──────── decomposable task ─────────► sparse team / adaptive compute
           │
-   complexity / value gate
-          │
-          ▼
-      sparse DAG planner
-          │
-   ┌──────┼────────┐
-   ▼      ▼        ▼
- worker  worker   worker       independent branches in parallel
-   │      │        │
-   └──── trajectory evidence ───┐
-                                ▼
-                    verification certificates
-                                │
-                                ▼
-                    calibrated team confidence
-                                │
-                       lead synthesis / audit
-                                │
-                 ┌──────────────┴──────────────┐
-                 ▼                             ▼
-              sufficient                material gap
-                 │                             │
-                STOP                  compute market bid
-                                               │
-                    ┌──────────────────────────┼─────────────────────────┐
-                    ▼                          ▼                         ▼
-                cached work               cheap/mixed              primary
-                    │                       coalition                   │
-                    └──────────────────────────┴─────────────────────────┘
-                                               │
-                                      bounded next round
+          └──────── durable mission ───────────► Mission State Plane
+                                                    │
+                                           revision + task lease
+                                                    │
+                                             context budget
+                                                    │
+                                       zero-token hierarchy gate
+                                             │              │
+                                           flat          structured
+                                             │              │
+                                             ▼              ▼
+                                           leaf       reasoning cell
+                                                           │
+                                                   child $ escrows
+                                                           │
+                                               independent child cells
+                                                           │
+                                                   real leaf attempts
+                                                           │
+                                              environment evidence
+                                                           │
+                                              verification certificate
+                                                           │
+                                      COMPLETE + sufficient evidence?
+                                              │             │
+                                             yes            no
+                                              │             │
+                                             DONE      BLOCKED/replan
 ```
 
-The parent remains the authority. Team outputs are deliberation data, not permissions. Persistent writes and external effects still pass through the normal policy, evidence, verification and exact human-approval path.
+The parent remains the authority. Team/cell outputs are deliberation data, not permissions. Persistent
+writes and external effects still pass through the normal capability, evidence, independent verification
+and exact human-approval path.
 
-## v0.5 — Evidence-Grounded Compute Economy
+## What changed in v0.7
 
-v0.4 learned from operational success, cost and synthesis-confidence gain. v0.5 makes that learning substantially harder to game: **compute strategies receive meaningful credit primarily when their output is supported by environment-backed evidence.**
+### Distributed Reasoning Cells
 
-### Verification certificates
+Recursive reasoning is treated as a resource-allocation problem, not a default swarm pattern.
 
-Each bounded worker result can receive a `VerificationCertificate`:
+- `max_cells` limits orchestration nodes.
+- `max_leaf_attempts` limits real model-worker rollouts.
+- `max_depth` limits recursion.
+- child cells receive dollar escrows carved from the parent envelope.
+- planner cost is charged before budget is distributed.
+- leaf `Goal.max_cost_usd` is exactly the leaf escrow allowance.
+- unused child reservation returns to the parent after settlement.
+
+A cell itself is not counted as a leaf agent. Conversely, two independent model rollouts consume two
+leaf-attempt slots even when they belong to the same cell.
+
+### Recoverable task leases
+
+Durable mission tasks have explicit ownership with TTL and heartbeat. A crashed dispatcher can release
+work through lease expiry; live work cannot be silently stolen. An `ACTIVE` task without concrete
+dispatcher lease history is never auto-requeued.
+
+If lease ownership is lost during execution, the computed result is non-committable even if the answer
+looks good.
+
+### Explicit completion semantics
+
+Reasoning cells distinguish:
 
 ```text
-VERIFIED   strong task-bound deterministic postcondition
-SUPPORTED  useful evidence, but not a full proof
-UNVERIFIED model result without sufficient environment evidence
-REFUTED    task-relevant deterministic postcondition failed
+COMPLETE  all scheduled work completed
+PARTIAL   scheduled analytical work ran, but not all branches succeeded
+BLOCKED   promised work could not run because a hard resource/scheduler ceiling was hit
+FAILED    no acceptable completed result
 ```
 
-A certificate records evidence strength, task-scope coverage, deterministic status, independent source count, evidence references and reasons. It is **not** a capability token and never grants permissions.
+Only `COMPLETE` maps to `success=True`, and even that is insufficient for durable mission completion
+without a task-relevant verification certificate.
 
-A critical anti-reward-hacking rule is that a passing command does not automatically verify a task. The verification engine estimates whether the check is actually a postcondition of the assigned subtask. For example, `compileall` succeeding is useful evidence for syntax/build work, but cannot certify a market-analysis conclusion simply because the check describes itself as validation.
+### Mission Dispatcher
 
-### Evidence tools
+The dispatcher links v0.6 durable state to v0.7 distributed cognition. It claims one dependency-ready
+task, revalidates readiness, transitions it using the mission revision, keeps the lease alive, executes
+under bounded context/cells/escrow, resolves concrete evidence from the trace store, and lets the
+canonical State Plane finalize the task only when the evidence gate passes.
 
-The child runtime receives two explicit evidence-producing primitives in addition to normal governed tools:
+`mission_dispatch_next` requires `expected_revision` and is non-idempotent. The existing execution ledger
+therefore deduplicates an exact retry, while a later dispatch requires reading fresh state and supplying
+the new revision.
 
-- `verify_workspace_command`: constrained test/lint/typecheck/compile/build commands in the disposable read-only-host sandbox. Arbitrary shell commands are rejected from this verification lane.
-- `source_fetch`: public-source retrieval with host, final URL and content hash metadata. The returned page remains `UNTRUSTED_EXTERNAL`; source diversity is evidence, never authority.
+### Zero-token hierarchy gate
 
-### Trajectory-aware confidence
+A difficult task is not automatically a hierarchical task. Before paying a cell-lead model call, a
+local deterministic gate requires evidence that the task is also structurally decomposable. Flat work
+goes directly to a leaf. The same gate is used in durable mission dispatch.
 
-Raw model confidence is not accepted as calibrated correctness. `TrajectoryConfidenceCalibrator` shrinks confidence toward uncertainty when evidence is weak, penalizes unresolved/failed work, reacts strongly to deterministic refutation and can later blend externally labelled reliability data.
+## Foundations retained
 
-This means a synthesizer saying “0.96 confident” can still trigger one bounded verification follow-up if the trajectory contains little evidence.
+### Evidence-Grounded Compute Economy — v0.5
 
-### Evidence-weighted strategy learning
-
-The compute market persists strategy statistics by task family/difficulty, but v0.5 adds evidence mass and temporal decay. A model-only success contributes little. Strong verified outcomes contribute much more. Old observations gradually lose influence, allowing the routing policy to adapt when model quality or provider economics change.
-
-The compute market can still choose among:
+The adaptive compute market can choose:
 
 ```text
 stop
@@ -106,86 +134,66 @@ primary_single
 mixed_pair
 ```
 
-but a hard remaining-dollar budget is a true ceiling: if no candidate shape fits, the result is `stop`, including for critical work. The economic layer cannot create money, permissions, agent slots or rounds.
+Strategy learning is weighted by verification evidence and decays over time. Model-only "success" has
+little influence. Hard remaining-dollar budgets remain true ceilings.
 
-## Champion / challenger policy arena
+The champion/challenger Policy Arena accepts only matched high-evidence benchmark trials for promotion
+recommendations. Promotion still requires an external human governance decision bound to the exact
+comparison fingerprint.
 
-Routing policy evolution is separated from ordinary live learning.
+### Durable Mission Plane — v0.6
 
-- live and shadow observations may inform diagnostics;
-- challenger policies can be evaluated at zero extra decision authority;
-- **only paired, sufficiently strong benchmark evidence can make a challenger promotable**;
-- promotion is bound to a SHA-256 fingerprint of the exact comparison (policies, trial count, quality, cost, pass rates and recommendation);
-- if benchmark evidence changes after review, the old approval fingerprint becomes invalid.
+Canonical long-horizon state lives outside model context:
 
-This prevents the compute optimizer from silently promoting itself because a few live traces looked favourable.
+- optimistic mission revisions prevent silent last-writer-wins overwrites;
+- task dependencies constrain completion;
+- evidence IDs must resolve to real executed trace observations;
+- stale evidence cannot certify new work;
+- workers read bounded context slices rather than owning canonical state;
+- only the governed parent receives mission-state write tools;
+- mission task count has a hard ceiling.
 
-The CLI exposes `adaptive-harness economy-status` for champion/challenger visibility. Policy promotion remains human-governed.
+### Sparse teams and guarded reuse
 
-## Sparse multi-agent execution
+The earlier foundations remain available for shallower work:
 
-The v0.3/v0.4 foundations remain:
-
-- zero-token complexity gate for obvious simple work;
-- sparse dependency DAG instead of broadcast MoA communication;
+- sparse dependency DAG rather than broadcast transcript sharing;
 - independent branches run concurrently;
-- context capsules contain only root goal, bounded subtask, relevant constraints/dependencies and optional prior analogue;
-- pair strategies consume two actual child slots;
-- cheap-worker loop depth scales with difficulty;
-- synthesis can reopen only targeted material gaps;
-- children cannot perform normal persistent host writes or external side effects;
-- code workers can test/build inside an ephemeral Docker copy while the host workspace stays read-only.
-
-## Multi-space semantic work cache
-
-The local cache separates:
-
-```text
-intent      what is being attempted
-procedure   audit / inspect / validate / repair / research / ...
-entities    paths, URLs, IDs, versions and other material targets
-full        complete normalized work text
-```
-
-Direct semantic reuse requires the normal freshness/workspace/provenance gates **plus sufficient verification evidence**. Weak legacy or model-only results are reference hints, not semantic truth. Negative reuse feedback can tighten thresholds.
-
-The default backend is intentionally **SQLite + deterministic local feature hashing**. No Qdrant, pgvector, embedding API or additional service is required. Richer retrieval backends can be plugged in later without becoming capability authorities.
+- context capsules avoid full-transcript replication;
+- multi-space semantic cache separates intent/procedure/entities/full text;
+- direct cache reuse requires the normal provenance/freshness/workspace gates plus strong evidence;
+- local SQLite + deterministic hashing is the default backend.
 
 ## Trust boundary
 
-The following principles remain non-negotiable:
+These constraints remain non-negotiable:
 
-- external/privileged actions require the configured exact human approval;
+- external/privileged actions require configured exact human approval;
 - approval is bound to the exact action fingerprint;
 - high-impact actions are independently checked before approval and again before execution;
-- remote MCP metadata is not authorization; import is local-policy/default-deny with schema review/pinning;
-- external content is untrusted data;
-- profiles may reduce capability but cannot expand it;
-- non-idempotent execution uses a durable ledger;
-- the ordinary actor cannot rewrite harness/config/evals/skills/Git metadata while operating on the harness checkout;
-- self-improvement candidates cannot modify their trusted exam or promotion boundary;
-- v0.5 additionally protects verification, confidence calibration, compute-market and policy-arena components from automatic self-promotion.
+- remote MCP metadata is untrusted and cannot grant capabilities;
+- profiles can reduce capability, never expand local policy;
+- non-idempotent execution uses a durable exactly-once/reconciliation ledger;
+- ordinary agents cannot rewrite the harness trust kernel while using the harness as a workspace;
+- self-improvement candidates cannot alter their trusted exam/promotion boundary;
+- verification, state, compute-policy, leases, escrow, cell-runtime and mission-dispatch components are
+  protected from autonomous self-promotion.
 
-## Model / provider layer
+## Model/provider layer
 
-The runtime uses LiteLLM normalization and is not tied to one model vendor. Role model IDs can point at OpenRouter, Replicate/OpenAI-compatible endpoints, Anthropic, Gemini, Ollama or other LiteLLM-supported providers. Roles include primary, planner, verifier, critic and cheap worker, with per-role fallback/retry/timeout/tool-mode settings.
+The runtime uses LiteLLM normalization and is not tied to one vendor. Role IDs may target OpenRouter,
+Replicate/OpenAI-compatible endpoints, Anthropic, Gemini, Ollama and other LiteLLM-supported providers.
+Roles include primary, planner, verifier, critic and cheap workers with per-role fallback/retry/timeout/
+tool-mode settings.
 
 ## Human channels
 
-The channel layer is transport-neutral. Telegram is the first adapter and remains default-deny:
-
-- allowlisted users;
-- private chats by default;
-- durable per-human/per-conversation sessions;
-- exact action approval buttons;
-- cross-session approval protection;
-- bot token read only from an environment variable.
-
-Channels are transports around the governed runtime, never tool bypasses.
+The channel layer is transport-neutral. Telegram remains the first adapter and is default-deny:
+allowlisted users, private chats by default, durable per-human/per-conversation sessions, exact approval
+buttons, cross-session approval protection, and token-from-environment only. A channel is a transport
+around the governed runtime, never a capability bypass.
 
 ## Self-improvement
-
-The self-maintenance path remains separate from normal work:
 
 ```text
 recurring trace weakness
@@ -194,12 +202,13 @@ minimal candidate patch
         ↓
 isolated regression + security evaluation
         ↓
-proposal artifact / exact diff
+proposal / exact diff
         ↓
 human promotion gate
 ```
 
-A candidate cannot rewrite tests/evals/security/promotion logic to grade itself. Skills are also quarantined and human-promoted.
+Skills are separately quarantined and human-promoted. A candidate cannot rewrite tests, evals, security
+or promotion logic to grade itself.
 
 ## Quick start
 
@@ -211,7 +220,10 @@ cp config/harness.example.yaml config/harness.yaml
 pytest -q
 adaptive-harness doctor -c config/harness.yaml
 adaptive-harness run "Inspect this repository and fix the failing tests" -c config/harness.yaml --profile code
-adaptive-harness chat -c config/harness.yaml --session main
+adaptive-harness mission-create "Ship the project with verified acceptance criteria" -c config/harness.yaml
+adaptive-harness mission-status <mission-id> -c config/harness.yaml
+adaptive-harness mission-dispatch <mission-id> -c config/harness.yaml
+adaptive-harness distributed-status -c config/harness.yaml
 adaptive-harness economy-status -c config/harness.yaml
 ```
 
@@ -221,14 +233,14 @@ Optional private Telegram channel after local allowlist/token configuration:
 adaptive-harness telegram -c config/harness.yaml
 ```
 
-## Validation and research
-
-See:
+## Documentation
 
 - `docs/ARCHITECTURE.md`
 - `docs/TEAM_ORCHESTRATION.md`
 - `docs/ADAPTIVE_COMPUTE_ECONOMY.md`
 - `docs/EVIDENCE_GROUNDED_COMPUTE.md`
+- `docs/DURABLE_MISSION_PLANE.md`
+- `docs/DISTRIBUTED_REASONING_CELLS.md`
 - `docs/VALIDATION.md`
 - `docs/THREAT_MODEL.md`
 - `docs/SELF_IMPROVEMENT.md`
@@ -236,17 +248,13 @@ See:
 - `docs/RESEARCH_EVIDENCE.md`
 - `docs/PRODUCTION_ROADMAP.md`
 
-The architecture draws on work around composable agents, sparse/multi-agent communication, cost-aware routing, adaptive test-time compute, semantic caching, trajectory calibration, evidence-conditioned execution, agent evaluation/reward hacking, long-horizon state and empirical self-improvement. The repository intentionally treats those results as design evidence rather than proof that one architecture is universally optimal.
+## Explicit non-claims / next frontier
 
-## Explicit non-claims
+v0.7 does **not** yet claim provider-backed superiority over a single strong agent, the sparse flat team,
+Hermes, broadcast MoA, or another agent framework. It also does not yet prove production hostile-code
+isolation or statistically significant long-horizon cost savings.
 
-v0.5 does **not** yet claim:
-
-- provider-backed dollar/token superiority over v0.4, Hermes, fixed broadcast MoA or any other system;
-- statistically meaningful cross-domain quality superiority;
-- production-scale cache precision measured on a representative trace corpus;
-- hostile-code microVM isolation;
-- persistent multi-agent code-writing worktrees with merge arbitration;
-- a full external long-horizon Manage–Execute–Audit state plane.
-
-Those are empirical/engineering gates, not wording problems. A future version becomes champion only when the relevant held-out evidence demonstrates it.
+The next research/engineering frontier is **independence-aware marginal compute**: do not buy a second or
+third agent because a counter says there is room; buy it only when its expected new reasoning/evidence
+channel justifies its marginal cost. Selection quality and evidence independence should matter more than
+raw agent count.
