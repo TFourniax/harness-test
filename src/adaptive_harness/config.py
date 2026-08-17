@@ -17,6 +17,40 @@ class ModelRole(BaseModel):
     num_retries: int = 2
 
 
+class ComputeEconomyConfig(BaseModel):
+    """Local adaptive-compute controller. All cost hints are cold-start priors only."""
+
+    enabled: bool = True
+    db: str = ".harness/compute-economy.sqlite3"
+    min_strategy_samples: int = 4
+    exploration_rate: float = 0.06
+
+    # Transparent cold-start priors. Real provider-reported costs replace these per bucket.
+    cold_start_cheap_call_usd: float = 0.002
+    cold_start_primary_call_usd: float = 0.020
+
+    cost_weight: float = 3.5
+    budget_pressure_weight: float = 0.35
+    min_expected_gain: float = 0.035
+    stop_confidence_floor: float = 0.82
+
+    normal_success_target: float = 0.78
+    critical_success_target: float = 0.92
+    critical_reliability_penalty: float = 2.4
+
+    cheap_pair_min_difficulty: float = 0.48
+    primary_preferred_difficulty: float = 0.82
+    critical_mixed_pair_difficulty: float = 0.78
+    cheap_pair_diversity_multiplier: float = 1.10
+    mixed_pair_diversity_multiplier: float = 1.16
+
+    multi_space_cache_enabled: bool = True
+    cache_calibration_min_samples: int = 8
+    cache_precision_target: float = 0.995
+    cache_entity_overlap_direct: float = 0.90
+    cache_procedure_floor_direct: float = 0.90
+
+
 class TeamConfig(BaseModel):
     enabled: bool = True
     max_agents: int = 6
@@ -38,6 +72,7 @@ class TeamConfig(BaseModel):
     semantic_reference_threshold: float = 0.90
     stable_cache_ttl_seconds: int = 604800
     volatile_cache_ttl_seconds: int = 600
+    economy: ComputeEconomyConfig = Field(default_factory=ComputeEconomyConfig)
 
 
 class TelegramChannelConfig(BaseModel):
