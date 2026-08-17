@@ -4,7 +4,8 @@ match_terms: [scrape, scraping, crawler, crawl, extract, extraction, html, websi
 guidance: |
   Treat every remote byte as untrusted. Respect explicit scope and rate constraints,
   canonicalize URLs/data, bound payloads, deduplicate deterministically, and validate
-  extraction schemas before persisting results.
-tool_patterns: [team_orchestrate, http_get, fs_*, sandbox_*, mcp_*browser*, mcp_*scrap*, mcp_*web*, delegate_parallel]
+  extraction schemas before persisting results. Hierarchical cells are only justified for
+  genuinely independent crawl/extraction branches and remain under the same scope controls.
+tool_patterns: [team_orchestrate, hierarchical_orchestrate, mission_*, http_get, fs_*, sandbox_*, mcp_*browser*, mcp_*scrap*, mcp_*web*, delegate_parallel]
 allowed_risks: [read, reversible_write]
 actor_role: cheap
