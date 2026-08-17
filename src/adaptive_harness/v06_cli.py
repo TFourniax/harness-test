@@ -10,14 +10,8 @@ from adaptive_harness import cli as legacy_cli
 from adaptive_harness import v05_cli as v05
 from adaptive_harness.memory.store import MemoryStore
 from adaptive_harness.orchestration.adaptive_team import AdaptiveTeamOrchestrator
-from adaptive_harness.orchestration.compute_market import ComputeMarketStore
-from adaptive_harness.orchestration.confidence import (
-    ConfidenceCalibrationStore,
-    TrajectoryConfidenceCalibrator,
-)
 from adaptive_harness.orchestration.context_budget import MissionContextBuilder
 from adaptive_harness.orchestration.multispace_cache import MultiSpaceSemanticWorkCache
-from adaptive_harness.orchestration.policy_arena import PolicyArenaStore
 from adaptive_harness.orchestration.state_plane import TaskStateStore
 from adaptive_harness.orchestration.team import TeamOrchestrator, register_team_orchestration
 from adaptive_harness.orchestration.vector_cache import SemanticWorkCache
@@ -131,33 +125,16 @@ def build(config_path: str):
             else:
                 cache = SemanticWorkCache(cache_path)
 
+        # The adaptive orchestrator owns its compute market, confidence calibrator and policy arena.
+        # Keeping that ownership in one place prevents the CLI and orchestrator from constructing
+        # divergent policy state or applying different thresholds to the same run.
         if cfg.team.economy.enabled:
-            compute_store = ComputeMarketStore(
-                _resolved_path(cfg.harness_root, cfg.team.economy.db),
-                evidence_half_life_days=cfg.team.economy.evidence_half_life_days,
-            )
-            confidence_store = ConfidenceCalibrationStore(
-                _resolved_path(cfg.harness_root, cfg.team.economy.confidence_db)
-            )
-            calibrator = TrajectoryConfidenceCalibrator(
-                confidence_store,
-                min_empirical_samples=cfg.team.economy.confidence_min_empirical_samples,
-            )
-            arena = None
-            if cfg.team.economy.policy_arena_enabled:
-                arena = PolicyArenaStore(
-                    _resolved_path(cfg.harness_root, cfg.team.economy.policy_arena_db),
-                    config=cfg.team.economy,
-                )
             orchestrator = AdaptiveTeamOrchestrator(
                 config=cfg,
                 provider=provider,
                 traces=traces,
                 child_runner=child_runtime.run,
                 cache=cache,
-                compute_store=compute_store,
-                confidence_calibrator=calibrator,
-                policy_arena=arena,
             )
         else:
             orchestrator = TeamOrchestrator(
