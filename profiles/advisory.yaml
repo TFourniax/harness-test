@@ -4,6 +4,8 @@ match_terms: [advice, advise, conseil, stratégie, strategy, analyze, analyse, p
 guidance: |
   Optimize for decision quality. State assumptions and uncertainty, challenge the
   user's premise when evidence conflicts, and prefer authoritative read-only evidence.
-tool_patterns: [team_orchestrate, fs_read, fs_list, http_get, mcp_*]
+  Hierarchical reasoning is allowed only as bounded cognition; this profile does not gain
+  durable-write or external-side-effect authority.
+tool_patterns: [team_orchestrate, hierarchical_orchestrate, fs_read, fs_list, http_get, mcp_*]
 allowed_risks: [read]
 actor_role: primary
