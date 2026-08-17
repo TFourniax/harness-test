@@ -10,7 +10,11 @@ from rich import print
 from adaptive_harness import cli as legacy_cli
 from adaptive_harness import v06_cli as v06
 from adaptive_harness.contracts import RiskLevel, ToolExecutionResult, ToolSpec, TrustLevel
-from adaptive_harness.orchestration.cell_runtime import CellLimits, HierarchicalCellRuntime
+from adaptive_harness.orchestration.cell_runtime import (
+    CellLimits,
+    CellPlan,
+    HierarchicalCellRuntime,
+)
 from adaptive_harness.orchestration.distributed_control import DistributedControlStore
 from adaptive_harness.orchestration.hierarchical_service import (
     LLMHierarchicalService,
@@ -99,6 +103,23 @@ def _distributed_components(cfg: HarnessConfig, provider, traces, runtime):
         default_budget_usd=dist.default_hierarchy_budget_usd,
     )
 
+    # Durable missions often contain many small tasks. Paying a manager-model call for every flat
+    # task would defeat the point of hierarchical economics, so mission planning gets the same
+    # deterministic zero-token structural gate as the explicit hierarchy tool.
+    async def mission_planner(spec, depth, max_children, allowance_usd):
+        if not hierarchy_worthwhile(
+            spec.task,
+            difficulty=spec.difficulty,
+            min_difficulty=dist.hierarchy_min_difficulty,
+            min_goal_chars=dist.hierarchy_min_goal_chars,
+        ):
+            return CellPlan(
+                children=[],
+                planner_cost_usd=0.0,
+                rationale="zero-token hierarchy gate selected direct leaf execution",
+            )
+        return await service.planner(spec, depth, max_children, allowance_usd)
+
     dispatcher = None
     if state_store is not None:
         dispatcher = MissionDispatcher(
@@ -109,13 +130,6 @@ def _distributed_components(cfg: HarnessConfig, provider, traces, runtime):
             context_builder=v06.MissionContextBuilder(),
             lease_ttl_seconds=dist.lease_ttl_seconds,
             context_budget_tokens=cfg.long_horizon.context_budget_tokens,
-        )
-        # Do not spend a planner call for obviously flat mission tasks.
-        dispatcher.hierarchy_gate = lambda task: hierarchy_worthwhile(
-            task.description,
-            difficulty=max(0.2, min(1.0, 0.35 + 0.55 * task.priority)),
-            min_difficulty=dist.hierarchy_min_difficulty,
-            min_goal_chars=dist.hierarchy_min_goal_chars,
         )
 
         async def dispatch_next(args: dict[str, Any]) -> ToolExecutionResult:
@@ -131,7 +145,7 @@ def _distributed_components(cfg: HarnessConfig, provider, traces, runtime):
                 mission_id,
                 owner=f"parent-dispatch:{mission_id}",
                 budget_usd=float(args.get("budget_usd", dist.default_dispatch_budget_usd)),
-                planner=service.planner,
+                planner=mission_planner,
                 leaf_runner=service.leaf_runner,
                 context_budget_tokens=(
                     int(args["context_budget_tokens"])
@@ -184,6 +198,7 @@ def _distributed_components(cfg: HarnessConfig, provider, traces, runtime):
     runtime._distributed_control = control
     runtime._hierarchical_service = service
     runtime._mission_dispatcher = dispatcher
+    runtime._mission_planner = mission_planner
     return control, service, dispatcher
 
 
@@ -211,7 +226,8 @@ def mission_dispatch(
     cfg, _provider, _traces, runtime = build(config)
     dispatcher = getattr(runtime, "_mission_dispatcher", None)
     service = getattr(runtime, "_hierarchical_service", None)
-    if dispatcher is None or service is None:
+    mission_planner = getattr(runtime, "_mission_planner", None)
+    if dispatcher is None or service is None or mission_planner is None:
         raise typer.BadParameter("distributed reasoning / long_horizon is disabled")
 
     async def execute():
@@ -223,7 +239,7 @@ def mission_dispatch(
                 if budget_usd is not None
                 else cfg.distributed_reasoning.default_dispatch_budget_usd
             ),
-            planner=service.planner,
+            planner=mission_planner,
             leaf_runner=service.leaf_runner,
         )
 
