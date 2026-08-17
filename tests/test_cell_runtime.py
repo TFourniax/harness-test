@@ -195,8 +195,6 @@ async def test_leaf_attempt_ceiling_blocks_incomplete_scheduled_work(tmp_path: P
         await asyncio.sleep(0)
         return LeafOutcome(answer=spec.id, success=True)
 
-    # One branch may execute, but the second cannot silently create an extra rollout or let the
-    # parent report COMPLETE. The result is explicitly BLOCKED so a mission dispatcher can replan.
     result = await runtime.execute(
         CellSpec(id="root", task="root"),
         owner="lead",
@@ -240,3 +238,63 @@ async def test_analytical_child_failure_is_partial_not_complete(tmp_path: Path):
     assert not result.success
     assert result.status == CellStatus.PARTIAL
     assert len(result.children) == 2
+
+
+@pytest.mark.asyncio
+async def test_panel_claims_only_actual_model_attempts(tmp_path: Path):
+    runtime = _runtime(tmp_path, max_depth=0, max_cells=1, max_leaf_attempts=3)
+
+    async def planner(spec, depth, max_children, allowance):
+        return CellPlan()
+
+    async def normal_leaf(spec, allowance):
+        raise AssertionError("panel path should replace normal leaf")
+
+    async def panel(spec, allowance, attempts):
+        assert await attempts.claim()
+        return LeafOutcome(
+            answer="strong first answer",
+            success=True,
+            evidence_refs=["proof-1"],
+            attempt_count=99,
+        )
+
+    result = await runtime.execute(
+        CellSpec(id="root", task="root", decomposable=False),
+        owner="lead",
+        budget_usd=0.05,
+        planner=planner,
+        leaf_runner=normal_leaf,
+        panel_leaf_runner=panel,
+    )
+    assert result.success
+    assert result.leaf_attempts == 1
+    assert "actual_attempts=1" in result.reason
+
+
+@pytest.mark.asyncio
+async def test_panel_cannot_hide_extra_model_calls_from_shared_attempt_budget(tmp_path: Path):
+    runtime = _runtime(tmp_path, max_depth=0, max_cells=1, max_leaf_attempts=2)
+
+    async def planner(spec, depth, max_children, allowance):
+        return CellPlan()
+
+    async def normal_leaf(spec, allowance):
+        raise AssertionError("panel path should replace normal leaf")
+
+    async def panel(spec, allowance, attempts):
+        assert await attempts.claim()
+        assert await attempts.claim()
+        assert not await attempts.claim()
+        return LeafOutcome(answer="two attempts", success=True, attempt_count=1)
+
+    result = await runtime.execute(
+        CellSpec(id="root", task="root", decomposable=False),
+        owner="lead",
+        budget_usd=0.05,
+        planner=planner,
+        leaf_runner=normal_leaf,
+        panel_leaf_runner=panel,
+    )
+    assert result.leaf_attempts == 2
+    assert "actual_attempts=2" in result.reason
