@@ -6,6 +6,7 @@ on:
       - agent/import-harness-telegram
     paths:
       - ".github/v06_finalize.py"
+      - ".github/v06_contract_fix.py"
       - ".github/workflows/v06-finalize.yml"
       - "src/adaptive_harness/orchestration/policy_arena.py"
   workflow_dispatch:
@@ -26,7 +27,8 @@ jobs:
         run: |
           set -euo pipefail
           python .github/v06_finalize.py
-          rm -f .github/v06_finalize.py .github/workflows/v06-finalize.yml
+          python .github/v06_contract_fix.py
+          rm -f .github/v06_finalize.py .github/v06_contract_fix.py .github/workflows/v06-finalize.yml
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
