@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
+from enum import Enum
 
 from pydantic import BaseModel, Field
 
@@ -14,6 +15,13 @@ from adaptive_harness.orchestration.distributed_control import (
 
 class CellLimitExceeded(RuntimeError):
     pass
+
+
+class CellStatus(str, Enum):
+    COMPLETE = "complete"
+    PARTIAL = "partial"
+    BLOCKED = "blocked"
+    FAILED = "failed"
 
 
 class CellSpec(BaseModel):
@@ -44,7 +52,10 @@ class LeafOutcome(BaseModel):
 
 class CellExecutionResult(BaseModel):
     cell_id: str
+    # `success` is intentionally strict: True means the scheduled cell completed, not merely that
+    # one useful partial branch exists. Callers may inspect `status=partial` for usable incomplete work.
     success: bool
+    status: CellStatus
     answer: str
     cost_usd: float = Field(default=0.0, ge=0.0)
     confidence: float = Field(default=0.0, ge=0.0, le=1.0)
@@ -53,6 +64,7 @@ class CellExecutionResult(BaseModel):
     leaf_attempts: int = 0
     cells_opened: int = 0
     reason: str = ""
+    blocked_reasons: list[str] = Field(default_factory=list)
 
 
 class CellLimits(BaseModel):
@@ -79,6 +91,10 @@ class HierarchicalCellRuntime:
     A cell is an orchestration node, not a model rollout by definition. Only actual leaf executions
     consume `max_leaf_attempts`. Dollar envelopes are delegated through durable child escrows, so
     sibling cells cannot spend the same remaining budget.
+
+    Completion semantics are deliberately fail-closed. A scheduled branch that never ran because a
+    hard resource ceiling was reached makes the parent BLOCKED, not successful. Analytical failures
+    may produce PARTIAL output, but PARTIAL never aliases COMPLETE for durable mission finalization.
     """
 
     def __init__(
@@ -199,9 +215,11 @@ class HierarchicalCellRuntime:
             )
         if outcome.cost_usd:
             self.control.charge(escrow_id, outcome.cost_usd)
+        status = CellStatus.COMPLETE if outcome.success else CellStatus.FAILED
         return CellExecutionResult(
             cell_id=spec.id,
-            success=outcome.success,
+            success=status == CellStatus.COMPLETE,
+            status=status,
             answer=outcome.answer,
             cost_usd=outcome.cost_usd,
             confidence=outcome.confidence,
@@ -252,9 +270,11 @@ class HierarchicalCellRuntime:
                 raise BudgetExceeded("fallback leaf exceeded parent escrow")
             if outcome.cost_usd:
                 self.control.charge(escrow_id, outcome.cost_usd)
+            status = CellStatus.COMPLETE if outcome.success else CellStatus.FAILED
             return CellExecutionResult(
                 cell_id=parent.id,
-                success=outcome.success,
+                success=status == CellStatus.COMPLETE,
+                status=status,
                 answer=outcome.answer,
                 confidence=outcome.confidence,
                 evidence_refs=self._dedupe(outcome.evidence_refs),
@@ -285,24 +305,46 @@ class HierarchicalCellRuntime:
         )
         child_results: list[CellExecutionResult] = []
         failures: list[str] = []
+        blocked_reasons: list[str] = []
         for (child, _eid), result in zip(child_escrows, results):
             if isinstance(result, Exception):
-                failures.append(f"{child.id}: {type(result).__name__}: {result}")
+                failure = f"{child.id}: {type(result).__name__}: {result}"
+                failures.append(failure)
+                if isinstance(result, (CellLimitExceeded, BudgetExceeded)):
+                    blocked_reasons.append(failure)
             else:
                 child_results.append(result)
+                blocked_reasons.extend(result.blocked_reasons)
 
         evidence = self._dedupe(
             [ref for result in child_results for ref in result.evidence_refs]
         )
-        successful = [result for result in child_results if result.success]
-        # Critical parent work is successful only if every scheduled child succeeded. For non-critical
-        # analysis, at least one successful branch produces a usable partial result for parent audit.
-        success = (
-            len(successful) == len(child_escrows)
-            if parent.critical
-            else bool(successful)
+        complete_children = [
+            result for result in child_results if result.status == CellStatus.COMPLETE
+        ]
+        child_blocked = any(
+            result.status == CellStatus.BLOCKED for result in child_results
         )
-        confidence = min((result.confidence for result in successful), default=0.0)
+        child_incomplete = any(
+            result.status in {CellStatus.PARTIAL, CellStatus.FAILED}
+            for result in child_results
+        )
+
+        # Resource/scheduler failures are not analytical disagreement; they mean promised work did not
+        # happen and therefore block finalization. If all scheduled branches ran but some failed, the
+        # result may be PARTIAL and useful to a parent replan, never silently COMPLETE.
+        if blocked_reasons or child_blocked:
+            status = CellStatus.BLOCKED
+        elif len(complete_children) == len(child_escrows):
+            status = CellStatus.COMPLETE
+        elif complete_children or child_incomplete:
+            status = CellStatus.PARTIAL
+        else:
+            status = CellStatus.FAILED
+
+        confidence = min(
+            (result.confidence for result in complete_children), default=0.0
+        )
         answer_parts = [
             f"[{result.cell_id}] {result.answer}" for result in child_results
         ]
@@ -310,10 +352,12 @@ class HierarchicalCellRuntime:
             answer_parts.append("FAILED CELLS: " + " | ".join(failures))
         return CellExecutionResult(
             cell_id=parent.id,
-            success=success,
+            success=status == CellStatus.COMPLETE,
+            status=status,
             answer="\n\n".join(answer_parts),
             confidence=confidence,
             evidence_refs=evidence,
             children=child_results,
             reason=rationale or "hierarchical decomposition",
+            blocked_reasons=self._dedupe(blocked_reasons),
         )
