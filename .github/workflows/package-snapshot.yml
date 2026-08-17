@@ -55,6 +55,7 @@ jobs:
               tf.extractall('.')
           print(f'overlay_files={len(members)}')
           PYSAFE
+          python .github/v05-staging/hotfix.py
           rm -rf .github/v05-staging
           rm -f /tmp/v05-overlay.b64 /tmp/v05-overlay.tar.gz
 
