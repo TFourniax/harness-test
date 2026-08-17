@@ -75,22 +75,16 @@ team:
   economy:
     enabled: true
     db: .harness/compute-economy.sqlite3
-
-    # Compute strategy learning is evidence weighted. Weak model-only outcomes have very little
-    # influence; deterministic postconditions and externally verified outcomes carry more weight.
-    min_strategy_samples: 4                # legacy compatibility/statistics only
+    min_strategy_samples: 4
     min_strategy_evidence_mass: 2.0
     evidence_half_life_days: 45
     exploration_rate: 0.06
-
-    # Transparent cold-start price priors; provider-reported history supersedes them per bucket.
     cold_start_cheap_call_usd: 0.002
     cold_start_primary_call_usd: 0.020
     cost_weight: 3.5
     budget_pressure_weight: 0.35
     min_expected_gain: 0.035
     stop_confidence_floor: 0.82
-
     normal_success_target: 0.78
     critical_success_target: 0.92
     critical_reliability_penalty: 2.4
@@ -99,23 +93,14 @@ team:
     critical_mixed_pair_difficulty: 0.78
     cheap_pair_diversity_multiplier: 1.10
     mixed_pair_diversity_multiplier: 1.16
-
-    # Process-aware confidence calibration. The live runtime never labels its own confidence as
-    # ground truth. This DB is ready for externally verified/held-out outcomes later.
     confidence_db: .harness/confidence-calibration.sqlite3
     confidence_min_empirical_samples: 12
-
-    # Multi-space local semantic cache: intent / procedure / material entities / full text.
     multi_space_cache_enabled: true
     cache_calibration_min_samples: 8
     cache_precision_target: 0.995
     cache_entity_overlap_direct: 0.90
     cache_procedure_floor_direct: 0.90
     direct_cache_min_evidence_strength: 0.72
-
-    # Compute-policy champion/challenger arena. Live/shadow traces are diagnostic only; a challenger
-    # may become promotable only from matched high-evidence benchmark trials, and actual promotion
-    # still requires an external governance decision.
     policy_arena_enabled: true
     policy_arena_db: .harness/compute-policy-arena.sqlite3
     policy_min_matched_trials: 12
@@ -125,9 +110,7 @@ team:
     policy_cost_reduction_target: 0.10
     policy_cost_tolerance: 0.05
 
-
 # Durable Mission Plane (v0.6): canonical task/fact state lives outside model context.
-# Workers can read budgeted slices; only the governed parent receives write tools.
 long_horizon:
   enabled: true
   state_db: .harness/task-state.sqlite3
@@ -135,6 +118,23 @@ long_horizon:
   task_done_evidence_strength: 0.60
   fact_evidence_strength: 0.25
   max_tasks_per_mission: 256
+
+# v0.7 Distributed Reasoning Cells. Orchestrator cells and real leaf model attempts have separate
+# ceilings. Durable task leases prevent duplicate work; nested dollar escrows prevent sibling cells
+# from promising the same budget twice. Flat work bypasses cell planning with a zero-token gate.
+distributed_reasoning:
+  enabled: true
+  control_db: .harness/distributed-control.sqlite3
+  lease_ttl_seconds: 300
+  max_depth: 2
+  max_cells: 8
+  max_leaf_attempts: 6
+  max_children_per_cell: 4
+  min_child_budget_usd: 0.002
+  default_hierarchy_budget_usd: 0.10
+  default_dispatch_budget_usd: 0.10
+  hierarchy_min_difficulty: 0.70
+  hierarchy_min_goal_chars: 260
 
 # Optional private Telegram control channel. Secrets stay in environment variables.
 telegram:
