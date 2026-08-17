@@ -48,8 +48,10 @@ jobs:
                   rel = PurePosixPath(member.name)
                   if rel.is_absolute() or '..' in rel.parts:
                       raise SystemExit(f'unsafe overlay path: {member.name}')
+                  if member.isdir():
+                      continue
                   if not member.isfile():
-                      raise SystemExit(f'overlay may contain regular files only: {member.name}')
+                      raise SystemExit(f'overlay may contain only directories and regular files: {member.name}')
               tf.extractall('.')
           print(f'overlay_files={len(members)}')
           PYSAFE
