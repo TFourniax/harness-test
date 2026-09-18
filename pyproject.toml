@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adaptive-agent-harness"
-version = "0.7.0"
+version = "0.8.0"
 description = "Model-agnostic, evidence-gated agent harness with adaptive compute, durable mission state and distributed reasoning cells."
 requires-python = ">=3.11"
 dependencies = [
@@ -24,7 +24,7 @@ telemetry = ["opentelemetry-api>=1.27", "opentelemetry-sdk>=1.27"]
 dev = ["pytest>=8.3", "pytest-asyncio>=0.24", "ruff>=0.6"]
 
 [project.scripts]
-adaptive-harness = "adaptive_harness.v07_cli:app"
+adaptive-harness = "adaptive_harness.v08_cli:app"
 
 [tool.setuptools.packages.find]
 where = ["src"]

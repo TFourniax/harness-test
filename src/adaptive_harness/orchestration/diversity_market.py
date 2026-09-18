@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sqlite3
+from statistics import NormalDist, stdev
+from math import sqrt
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -134,6 +136,8 @@ class MarginalStats:
     coverage_gain: float
     cost_usd: float
     selected_rate: float
+    verification_gain_lcb: float = 0.0
+    independence_lcb: float = 0.0
 
     @property
     def verification_gain(self) -> float:
@@ -219,6 +223,16 @@ class MarginalDiversityStore:
         if not rows:
             return None
         n = len(rows)
+
+        def lower_bound(values: list[float]) -> float:
+            # Approximate one-sided 90% normal lower bound, not a distribution-free guarantee.
+            # One observation cannot estimate variance. Constant observed samples have zero SE;
+            # neither case is evidence of universal calibration or unseen-task performance.
+            if len(values) < 2:
+                return 0.0
+            return _clamp(sum(values) / len(values)
+                          - NormalDist().inv_cdf(0.90) * stdev(values) / sqrt(len(values)))
+
         return MarginalStats(
             samples=n,
             independence=sum(float(row[0]) for row in rows) / n,
@@ -227,6 +241,10 @@ class MarginalDiversityStore:
             coverage_gain=sum(float(row[3]) for row in rows) / n,
             cost_usd=sum(float(row[4]) for row in rows) / n,
             selected_rate=sum(int(row[5]) for row in rows) / n,
+            verification_gain_lcb=lower_bound([
+                _clamp(0.55 * row[1] + 0.25 * row[2] + 0.20 * row[3]) for row in rows
+            ]),
+            independence_lcb=lower_bound([float(row[0]) for row in rows]),
         )
 
 
@@ -308,8 +326,8 @@ class MarginalDiversityMarket:
         prior_gain, prior_independence = self._prior(slot_index, difficulty, critical)
         samples = stats.samples if stats else 0
         if stats and samples >= self.min_samples:
-            expected_gain = stats.verification_gain
-            expected_independence = stats.independence
+            expected_gain = stats.verification_gain_lcb
+            expected_independence = stats.independence_lcb
             empirical_cost = stats.cost_usd if stats.cost_usd > 0 else expected_cost
             expected_cost = max(expected_cost, empirical_cost)
         elif stats:
@@ -321,6 +339,13 @@ class MarginalDiversityMarket:
         else:
             expected_gain = prior_gain
             expected_independence = prior_independence
+        if expected_cost > remaining + 1e-12:
+            return MarginalDecision(
+                buy=False, slot_index=slot_index, expected_gain=_clamp(expected_gain),
+                expected_independence=_clamp(expected_independence),
+                expected_cost_usd=expected_cost, utility=-self.cost_weight * expected_cost,
+                sample_count=samples, reason="empirical cost exceeds remaining escrow",
+            )
         useful_gain = expected_gain * (0.45 + 0.55 * expected_independence)
         utility = useful_gain - self.cost_weight * expected_cost
         if stats and samples >= self.min_samples and expected_independence < self.redundancy_floor:

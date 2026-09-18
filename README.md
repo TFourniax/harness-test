@@ -9,11 +9,17 @@ The design objective is:
 > **maximum task quality for the minimum justified compute, under evidence, bounded capabilities,
 > durable state, independent verification, recoverable execution, and human-governed evolution.**
 
-**Current frontier snapshot: v0.7.0 — Distributed Reasoning Cells.** v0.7 adds recoverable task leases,
-hierarchical dollar escrow, separate cell/leaf-attempt ceilings, explicit partial/blocked completion
-states, a lease-safe Mission Dispatcher, and a zero-token gate that prevents paying for hierarchy on
-flat work. The release remains a research/reference implementation: provider-backed held-out benchmarks
-are still required before claiming universal quality or cost superiority.
+**Current source: v0.8.0 with opt-in JEV decision routing (experimental).**
+The installed CLI now selects the v0.8 builder. The existing deterministic controls remain
+in charge; the new semantic gate can skip a generative planner when one worker suffices.
+Optional JEV panel routing is separate and disabled by default because it adds overhead
+relative to existing free rules. See [activation, privacy, validation and evaluation](docs/JEV_ROUTING.md).
+
+The original source had **166 passing tests and four failures**. The integration repairs
+its version wiring, missing conservative marginal statistics and empirical-cost budget recheck.
+The current local source passes **239 tests**; see exact-head CI for the remote matrix.
+**No live JEV quality, latency or cost advantage has been measured.** This remains a research/
+reference harness, not a production certification. Historical v0.7 ZIPs are not this source.
 
 ## Architecture
 
