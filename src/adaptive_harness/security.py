@@ -54,6 +54,7 @@ IMMUTABLE_FROM_SELF_EVOLUTION = (
     "src/adaptive_harness/orchestration/mission_dispatcher.py",
     "src/adaptive_harness/orchestration/hierarchical_service.py",
     "src/adaptive_harness/orchestration/panel_service.py",
+    "src/adaptive_harness/orchestration/jev.py",
     "src/adaptive_harness/orchestration/diversity_market.py",
     "src/adaptive_harness/v08_config.py",
     "src/adaptive_harness/v08_cli.py",

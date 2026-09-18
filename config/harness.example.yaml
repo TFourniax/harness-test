@@ -147,3 +147,19 @@ telegram:
   max_steps: 40
   max_cost_usd: null
   profile: null
+
+# Opt-in typed decision API. No requests are sent with these defaults.
+# See docs/JEV_ROUTING.md before changing consent or mode. Never put an API key here.
+jev:
+  mode: 'off'
+  allow_remote_state: false
+  model: jev-1.13.0
+  api_key_env: TYPESAFE_API_KEY
+  planner_gate: true
+  panel_routing: false
+  timeout_seconds: 1.5
+  min_confidence: 0.80
+  min_probability: 0.85
+  min_margin: 0.25
+  max_calls: 64
+  max_total_cost_usd: 0.03

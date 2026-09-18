@@ -3,7 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
+
+from adaptive_harness.orchestration.jev import JevConfig
 
 from adaptive_harness.v07_config import HarnessConfig as V07HarnessConfig
 
@@ -23,9 +25,20 @@ class MarginalDiversityConfig(BaseModel):
 
 
 class HarnessConfig(V07HarnessConfig):
+    jev: JevConfig = Field(default_factory=JevConfig)
     marginal_diversity: MarginalDiversityConfig = Field(
         default_factory=MarginalDiversityConfig
     )
+
+    @model_validator(mode="after")
+    def check_jev_wiring(self):
+        if self.jev.mode != "off" and not (self.jev.planner_gate or self.jev.panel_routing):
+            raise ValueError("Enable at least one JEV decision site")
+        if self.jev.mode != "off" and not (
+            self.distributed_reasoning.enabled and self.marginal_diversity.enabled
+        ):
+            raise ValueError("JEV routing requires distributed_reasoning and marginal_diversity")
+        return self
 
     @classmethod
     def from_yaml(cls, path: str | Path) -> "HarnessConfig":

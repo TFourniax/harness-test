@@ -205,8 +205,6 @@ class HierarchicalCellRuntime:
             outcome = await leaf_runner(spec, allowance)
         else:
             outcome = await panel_leaf_runner(spec, allowance, attempt_budget)
-            if attempt_budget.claimed == 0:
-                raise CellLimitExceeded("panel could not claim any leaf-attempt slot")
         if outcome.attempt_count != attempt_budget.claimed:
             # The counter is authoritative. A runner cannot under/over-report model calls.
             outcome = outcome.model_copy(update={"attempt_count": attempt_budget.claimed})
@@ -217,6 +215,10 @@ class HierarchicalCellRuntime:
             )
         if outcome.cost_usd:
             self.control.charge(escrow_id, outcome.cost_usd)
+        # A concurrent cell may take the last rollout slot while JEV is in flight. The
+        # decision was still purchased: settle its expense BEFORE reporting the blocked leaf.
+        if panel_leaf_runner is not None and attempt_budget.claimed == 0:
+            raise CellLimitExceeded("panel could not claim any leaf-attempt slot")
         return outcome
 
     async def _run_cell(

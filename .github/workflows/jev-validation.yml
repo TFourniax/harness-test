@@ -1,0 +1,54 @@
+name: JEV integration validation
+
+on:
+  push:
+    branches: [feat/jev-decision-routing-20260918]
+  pull_request:
+    branches: [agent/import-harness-telegram]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: jev-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ['3.11', '3.12', '3.13']
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Archive exact source for independent inspection
+        if: matrix.python == '3.11'
+        run: git archive --format=zip -o /tmp/harness-source.zip HEAD
+      - uses: actions/upload-artifact@v4
+        if: matrix.python == '3.11'
+        with:
+          name: jev-exact-source
+          path: /tmp/harness-source.zip
+          retention-days: 14
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Install
+        run: python -m pip install -e '.[dev]'
+      - name: Test source
+        run: python -m pytest -q --junitxml=/tmp/pytest.xml
+      - name: Compile and critical lint
+        run: |
+          python scripts/eval_jev_routing.py
+          python -m compileall -q src tests scripts
+          python -m ruff check --select E9,F63,F7,F82 src tests scripts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jev-tests-${{ matrix.python }}
+          path: /tmp/pytest.xml
+          if-no-files-found: ignore
+          retention-days: 14

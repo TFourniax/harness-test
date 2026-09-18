@@ -1,3 +1,13 @@
+# Current JEV integration qualification (2026-09-18)
+
+Current source and precise limits: [JEV routing validation](JEV_ROUTING.md#validation-and-baseline-repairs).
+Local exact-source tests: **239 passed**, compilation passed; live JEV validation is outstanding.
+The dedicated exact-head CI is authoritative for its remote Python/Ruff results.
+
+**The v0.7 snapshot below is historical, not a claim about this branch or its artifacts.**
+
+---
+
 # Validation Snapshot
 
 Date: 2026-08-17
